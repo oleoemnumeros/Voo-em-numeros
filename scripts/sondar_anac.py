@@ -1,93 +1,44 @@
-"""Sonda as fontes de dados de voos da ANAC e imprime o que encontrar.
-
-Uso único, para descobrir onde e em que formato a base VRA está publicada.
-"""
-import re
-import sys
-import urllib.parse
+"""Sonda 2: estatísticas de um mês do VRA para decidir filtros e fuso."""
+import collections
+import csv
+import io
 
 import requests
 
 UA = {"User-Agent": "Mozilla/5.0 (voo-em-numeros sonda)"}
-CANDIDATOS = [
-    "https://sistemas.anac.gov.br/dadosabertos/Voos%20e%20opera%C3%A7%C3%B5es%20a%C3%A9reas/Voo%20Regular%20Ativo%20%28VRA%29/2026/",
-    "https://sistemas.anac.gov.br/dadosabertos/Voos%20e%20opera%C3%A7%C3%B5es%20a%C3%A9reas/Voo%20Regular%20Ativo%20%28VRA%29/2025/",
-    "https://siros.anac.gov.br/siros/registros/diversos/vra/2026/",
-    "https://sistemas.anac.gov.br/dadosabertos/Voos%20e%20opera%C3%A7%C3%B5es%20a%C3%A9reas/Percentuais%20de%20atrasos%20e%20cancelamentos/",
-]
-
-
-def links(html, base):
-    out = []
-    for href in re.findall(r'href="([^"]+)"', html, flags=re.I):
-        if href.startswith(("?", "#", "mailto:", "javascript:")):
-            continue
-        out.append(urllib.parse.urljoin(base, href))
-    return out
-
-
-def get(url, stream=False):
-    try:
-        r = requests.get(url, headers=UA, timeout=60, stream=stream)
-        return r
-    except Exception as e:  # noqa: BLE001
-        print(f"  ERRO {url}: {e}")
-        return None
-
-
-def mostrar_arquivo(url):
-    r = get(url, stream=True)
-    if r is None:
-        return
-    print(f"\n### ARQUIVO {url} -> {r.status_code} {r.headers.get('content-type')} {r.headers.get('content-length')}")
+for ano, mes in ((2026, 9), (2025, 12), (2024, 1)):
+    url = f"https://siros.anac.gov.br/siros/registros/diversos/vra/{ano}/VRA_{ano}_{mes:02d}.csv"
+    r = requests.get(url, headers=UA, timeout=120)
+    print("\n=====", url, r.status_code, len(r.content))
     if r.status_code != 200:
-        return
-    bruto = b""
-    for pedaco in r.iter_content(4096):
-        bruto += pedaco
-        if len(bruto) > 6000:
-            break
-    for cod in ("utf-8-sig", "latin-1"):
-        try:
-            texto = bruto.decode(cod)
-            break
-        except UnicodeDecodeError:
-            continue
-    print("\n".join(texto.splitlines()[:8])[:3000])
-
-
-def main():
-    vistos = set()
-    fila = [(u, 0) for u in CANDIDATOS]
-    arquivos = []
-    while fila:
-        url, nivel = fila.pop(0)
-        if url in vistos or len(vistos) > 60:
-            continue
-        vistos.add(url)
-        r = get(url)
-        if r is None:
-            continue
-        print(f"\n== {url} -> {r.status_code} {r.headers.get('content-type')}")
-        if r.status_code != 200 or "html" not in (r.headers.get("content-type") or ""):
-            continue
-        ls = links(r.text, url)
-        relevantes = [l for l in ls if re.search(r"vra|voo|dadosabertos|\.csv|\.zip|\.json|\.xlsx", l, re.I)]
-        for l in relevantes[:80]:
-            print("   ", l)
-        for l in relevantes:
-            if re.search(r"\.(csv|zip|json|txt)$", l, re.I):
-                arquivos.append(l)
-            elif nivel < 2 and l.endswith("/") and l.startswith(url) and l != url:
-                fila.append((l, nivel + 1))
-    print("\n\n######## ARQUIVOS ENCONTRADOS:", len(arquivos))
-    for a in arquivos[-40:]:
-        print(a)
-    # mostra o cabeçalho dos 2 arquivos mais recentes (pela ordem da listagem)
-    vra = [x for x in arquivos if "2026" in x and re.search(r"\.(csv|json)$", x, re.I)]
-    for a in vra[-2:] + [x for x in arquivos if "Percentuais" in x][-1:]:
-        mostrar_arquivo(a)
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+        continue
+    txt = r.content.decode("utf-8-sig", errors="replace")
+    linhas = txt.splitlines()
+    print("linha1:", linhas[0][:200])
+    print("linha2:", linhas[1][:300])
+    ini = 1 if linhas[0].lower().startswith("atualizado") else 0
+    rd = csv.DictReader(io.StringIO("\n".join(linhas[ini:])), delimiter=";")
+    rows = list(rd)
+    print("colunas:", rd.fieldnames)
+    print("linhas:", len(rows))
+    c = {k: collections.Counter() for k in ("Código Tipo Linha", "Situação Voo", "Código Justificativa")}
+    emp = collections.Counter()
+    horas = collections.Counter()
+    for x in rows:
+        for k in c:
+            c[k][x.get(k)] += 1
+        o, d = x["ICAO Aeródromo Origem"], x["ICAO Aeródromo Destino"]
+        if o[:2] in ("SB", "SD", "SN", "SS", "SW", "SI", "SJ") and d[:2] in ("SB", "SD", "SN", "SS", "SW", "SI", "SJ"):
+            emp[(x["ICAO Empresa Aérea"], x["Código Tipo Linha"])] += 1
+            if o in ("SBGR", "SBSP", "SBSV", "SBBR") and x["Código Tipo Linha"] == "N":
+                horas[x["Partida Prevista"][11:13]] += 1
+    for k, v in c.items():
+        print(k, v.most_common(25))
+    print("empresas domésticas:", emp.most_common(40))
+    print("partidas previstas por hora (GRU/CGH/SSA/BSB, tipo N):", sorted(horas.items()))
+    # exemplos de voos domésticos para conferir horário com a vida real
+    ex = [x for x in rows if x["ICAO Aeródromo Origem"] == "SBSP" and x["ICAO Aeródromo Destino"] == "SBRJ"][:5]
+    for x in ex:
+        print("CGH-SDU:", x["ICAO Empresa Aérea"], x["Número Voo"], x["Partida Prevista"], x["Partida Real"], x["Chegada Prevista"], x["Chegada Real"], x["Situação Voo"])
+    if ano != 2026:
+        break
