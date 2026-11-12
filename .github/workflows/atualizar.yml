@@ -1,0 +1,70 @@
+name: Atualizar dados da ANAC e publicar o site
+
+on:
+  # A ANAC publica o mês anterior perto do fim do mês seguinte; o robô confere
+  # todo dia e só baixa quando aparece um mês novo.
+  schedule:
+    - cron: "41 10 * * *"
+  # Botão "Run workflow" na aba Actions
+  workflow_dispatch:
+    inputs:
+      forcar:
+        description: "Baixar de novo todos os meses"
+        type: boolean
+        default: false
+  # Roda quando o código do robô ou do site muda
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "site/**"
+      - ".github/workflows/atualizar.yml"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: atualizar
+  cancel-in-progress: false
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: pip install requests==2.32.3
+
+      - name: Baixar dados da ANAC
+        id: robo
+        continue-on-error: true
+        env:
+          FORCAR: ${{ (github.event_name == 'workflow_dispatch' && inputs.forcar) && '1' || '0' }}
+        run: python scripts/atualizar.py
+
+      - name: Salvar no repositório
+        if: always()
+        run: |
+          git config user.name "Voo em Números (robô)"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "Sem mudanças."
+          else
+            git commit -m "Dados atualizados: $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      - name: Falhar se o robô falhou
+        if: steps.robo.outcome == 'failure'
+        run: |
+          echo "O robô falhou. Veja o log acima e data/debug.json."
+          exit 1
