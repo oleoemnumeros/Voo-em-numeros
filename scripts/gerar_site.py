@@ -291,6 +291,19 @@ class Base:
                 else:
                     self._nomes_aero[a] = cid
 
+    # links só para páginas que existem
+    pag_cias, pag_rotas, pag_aero = set(), set(), set()
+
+    def link_cia(self, c: str) -> str:
+        n = esc(self.cia_nome(c))
+        return f'<a href="/companhias/{self.cia_slug(c)}/">{n}</a>' if c in self.pag_cias else n
+
+    def link_rota(self, o: str, d: str, texto: str) -> str:
+        return f'<a href="/rotas/{self.rota_slug(o, d)}/">{texto}</a>' if (o, d) in self.pag_rotas else f"<b>{texto}</b>"
+
+    def link_aero(self, a: str, texto: str) -> str:
+        return f'<a href="/aeroportos/{self.aero_slug(a)}/">{texto}</a>' if a in self.pag_aero else f"<b>{texto}</b>"
+
     def nome_cod(self, icao: str) -> str:
         n, c = self.aero_nome(icao), self.cod(icao)
         return n[:-1] + f", {c})" if n.endswith(")") else f"{n} ({c})"
@@ -660,7 +673,7 @@ def pg_aero(B: Base, o: str, rota_pag, voo_pag) -> str:
     # companhias
     cs = [(c, x) for (c, oo), x in B.cia_aero[B.ref].items() if oo == o and x.prev >= 10]
     cs.sort(key=lambda t: -t[1].prev)
-    lin_c = "".join(f'<tr><td><a href="/companhias/{B.cia_slug(c)}/">{esc(B.cia_nome(c))}</a></td><td style="min-width:180px">{meter(x.p_pont)}</td>'
+    lin_c = "".join(f'<tr><td>{B.link_cia(c)}</td><td style="min-width:180px">{meter(x.p_pont)}</td>'
                     f'<td class="r num">{pc(x.p_canc)}</td><td class="r num">{nf(x.prev)}</td></tr>' for c, x in cs)
     # destinos
     ds = [(d, B.soma(B.rota, (o, d), B.u3)) for (oo, d) in rota_pag if oo == o]
@@ -735,7 +748,7 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
         if x.prev:
             cs.append((c, x))
     cs.sort(key=lambda t: -(t[1].p_pont or 0))
-    lin_c = "".join(f'<tr><td><a href="/companhias/{B.cia_slug(c)}/">{esc(B.cia_nome(c))}</a></td><td style="min-width:180px">{meter(x.p_pont)}</td>'
+    lin_c = "".join(f'<tr><td>{B.link_cia(c)}</td><td style="min-width:180px">{meter(x.p_pont)}</td>'
                     f'<td class="r num">{pc(x.p_canc)}</td><td class="r num">{min_txt(x.media_atr)}</td><td class="r num">{nf(x.prev)}</td></tr>' for c, x in cs)
     # voos
     vs = []
@@ -797,7 +810,7 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
     volta = (d, o) in rota_pag
     corpo = f"""<section class="hero"><span class="kicker">Rota · voos diretos</span><h1>{esc(B.nome_cod(o))} → {esc(B.nome_cod(d))}</h1>
 <p class="lead">Em {base_txt}, <strong>{pc(a.p_pont)}</strong> dos voos chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados. {dur}</p>
-<div class="btns">{f'<a class="btn sec" href="/rotas/{B.rota_slug(d, o)}/">Ver a volta: {esc(cd)} → {esc(co)}</a>' if volta else ""}<a class="btn sec" href="/aeroportos/{B.aero_slug(o)}/">Aeroporto {esc(co)}</a><a class="btn sec" href="/aeroportos/{B.aero_slug(d)}/">Aeroporto {esc(cd)}</a></div></section>
+<div class="btns">{f'<a class="btn sec" href="/rotas/{B.rota_slug(d, o)}/">Ver a volta: {esc(cd)} → {esc(co)}</a>' if volta else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(o)}/">Aeroporto {esc(co)}</a>' if o in B.pag_aero else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(d)}/">Aeroporto {esc(cd)}</a>' if d in B.pag_aero else ""}</div></section>
 {tiles_acc(a, a0)}
 <section class="card"><div class="card-head"><h2>Por companhia nesta rota</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Atraso médio dos atrasados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_c}</tbody></table></div></section>
 <section class="card"><div class="card-head"><h2>Os voos desta rota, do mais ao menos pontual</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Companhia</th><th scope="col">Saída prevista</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Atraso médio</th><th scope="col" class="r">Cancelados</th></tr></thead><tbody>{lin_v}</tbody></table></div>
@@ -825,7 +838,7 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
     for (o, d), x in legs:
         hora = B.voo_hora[(c, n, o, d)].most_common(1)[0][0] if B.voo_hora[(c, n, o, d)] else ""
         info = B.voo_info.get((c, n, o, d), ("", "", 0))
-        lin_l.append(f'<tr><td class="wrap"><a href="/rotas/{B.rota_slug(o, d)}/">{esc(B.cod(o))} → {esc(B.cod(d))}</a> '
+        lin_l.append(f'<tr><td class="wrap">{B.link_rota(o, d, esc(B.cod(o)) + " → " + esc(B.cod(d)))} '
                      f'<span class="small">{esc(B.cidade(o))} → {esc(B.cidade(d))}</span></td><td class="num">{esc(hora)}</td>'
                      f'<td>{esc(info[1])}</td><td class="r num"><b>{pc(x.p_pont)}</b></td><td class="r num">{pc(x.p_canc)}</td><td class="r num">{nf(x.prev)}</td></tr>')
     # comparação com outros voos do trecho principal
@@ -932,7 +945,7 @@ def pg_fim(B: Base, fim, aero_pag) -> str:
         if s[0] >= 500:
             lin_c.append((c, s))
     lin_c.sort(key=lambda t: -(t[1][3] / t[1][2] if t[1][2] else 0))
-    tab_c = "".join(f'<tr><td><a href="/companhias/{B.cia_slug(c)}/">{esc(B.cia_nome(c))}</a></td><td style="min-width:180px">{meter(s[3] / s[2] if s[2] else None)}</td>'
+    tab_c = "".join(f'<tr><td>{B.link_cia(c)}</td><td style="min-width:180px">{meter(s[3] / s[2] if s[2] else None)}</td>'
                     f'<td class="r num">{pc(s[1] / s[0] if s[0] else None)}</td><td class="r num">{nf(s[0])}</td></tr>' for c, s in lin_c)
     # aeroportos
     la = []
@@ -1066,6 +1079,10 @@ def gerar_imagens(B: Base):
 
 
 # ---------------------------------------------------------------- principal
+def cias_pag_pre(B: Base):
+    return [c for c in {c for m in B.u12 for c in B.cia[m]} if B.soma(B.cia, c, B.u12).prev >= 300]
+
+
 def escreve(caminho: str, conteudo: str):
     p = SAIDA / caminho.strip("/") / "index.html" if caminho.endswith("/") else SAIDA / caminho.lstrip("/")
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -1103,9 +1120,10 @@ def main() -> int:
         if s in vistos:
             del voo_pag[k]
         vistos[s] = k
+    B.pag_cias, B.pag_rotas, B.pag_aero = set(cias_pag_pre(B)), set(rota_pag), set(aero_pag)
     cias_rank = [c for c, x in B.cia[B.ref].items() if x.prev >= MIN_CIA_RANK]
     cias_rank.sort(key=lambda c: -(B.cia[B.ref][c].p_pont or 0))
-    cias_pag = [c for c in {c for m in B.u12 for c in B.cia[m]} if B.soma(B.cia, c, B.u12).prev >= 300]
+    cias_pag = cias_pag_pre(B)
     cias_pag.sort(key=lambda c: -B.soma(B.cia, c, B.u12).prev)
     fim = periodo_fim(B)
 
