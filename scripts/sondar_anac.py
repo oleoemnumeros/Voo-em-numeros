@@ -10,11 +10,10 @@ import requests
 
 UA = {"User-Agent": "Mozilla/5.0 (voo-em-numeros sonda)"}
 CANDIDATOS = [
-    "https://sistemas.anac.gov.br/dadosabertos/Voos%20e%20opera%C3%A7%C3%B5es%20a%C3%A9reas/",
-    "https://sistemas.anac.gov.br/dadosabertos/Voos%20e%20opera%C3%A7%C3%B5es%20a%C3%A9reas/Voo%20Regular%20Ativo%20%28VRA%29/",
-    "https://siros.anac.gov.br/siros/registros/diversos/vra/",
-    "https://www.gov.br/anac/pt-br/acesso-a-informacao/dados-abertos/areas-de-atuacao/voos-e-operacoes-aereas/voo-regular-ativo-vra",
-    "https://www.gov.br/anac/pt-br/acesso-a-informacao/dados-abertos/areas-de-atuacao/voos-e-operacoes-aereas",
+    "https://sistemas.anac.gov.br/dadosabertos/Voos%20e%20opera%C3%A7%C3%B5es%20a%C3%A9reas/Voo%20Regular%20Ativo%20%28VRA%29/2026/",
+    "https://sistemas.anac.gov.br/dadosabertos/Voos%20e%20opera%C3%A7%C3%B5es%20a%C3%A9reas/Voo%20Regular%20Ativo%20%28VRA%29/2025/",
+    "https://siros.anac.gov.br/siros/registros/diversos/vra/2026/",
+    "https://sistemas.anac.gov.br/dadosabertos/Voos%20e%20opera%C3%A7%C3%B5es%20a%C3%A9reas/Percentuais%20de%20atrasos%20e%20cancelamentos/",
 ]
 
 
@@ -54,7 +53,7 @@ def mostrar_arquivo(url):
             break
         except UnicodeDecodeError:
             continue
-    print("\n".join(texto.splitlines()[:12]))
+    print("\n".join(texto.splitlines()[:8])[:3000])
 
 
 def main():
@@ -85,7 +84,8 @@ def main():
     for a in arquivos[-40:]:
         print(a)
     # mostra o cabeçalho dos 2 arquivos mais recentes (pela ordem da listagem)
-    for a in [x for x in arquivos if x.lower().endswith(".csv")][-2:]:
+    vra = [x for x in arquivos if "2026" in x and re.search(r"\.(csv|json)$", x, re.I)]
+    for a in vra[-2:] + [x for x in arquivos if "Percentuais" in x][-1:]:
         mostrar_arquivo(a)
 
 
