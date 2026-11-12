@@ -826,6 +826,15 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
                   corpo, "/rotas/", migalhas=[("/rotas/", "Rotas"), ("", f"{co} → {cd}")], jsonld=[ld])
 
 
+def botao_ao_vivo(c: str, n: str) -> str:
+    """Abre o voo em tempo real no Flightradar24 (só para companhias com código IATA conhecido)."""
+    iata = CIAS.get(c, ("", "", ""))[1]
+    if not iata or not n.isdigit():
+        return ""
+    return (f'<a class="btn" href="https://www.flightradar24.com/data/flights/{iata.lower()}{n}" target="_blank" '
+            f'rel="noopener nofollow">Acompanhar o {iata} {n} agora ↗</a>')
+
+
 def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
     c, n = k
     cod, cia = B.cod_voo(c, n), B.cia_nome(c)
@@ -869,7 +878,8 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
                       f"Ele é {lugar} entre {len(outros)} voos diretos {B.cod(o)}–{B.cod(d)} com pelo menos 10 viagens nos últimos 3 meses."))
     faq, ld = faq_html(pares)
     corpo = f"""<section class="hero"><span class="kicker">Voo · {esc(cia)}</span><h1>Voo {esc(cod)}: {esc(trecho)}</h1>
-<p class="lead">Nos últimos 3 meses, o {esc(cod)}{f" (saída prevista às {hora0})" if hora0 else ""} chegou no horário em <strong>{pc(a.p_pont)}</strong> das viagens e foi cancelado em <strong>{pc(a.p_canc)}</strong> dos dias previstos.</p></section>
+<p class="lead">Nos últimos 3 meses, o {esc(cod)}{f" (saída prevista às {hora0})" if hora0 else ""} chegou no horário em <strong>{pc(a.p_pont)}</strong> das viagens e foi cancelado em <strong>{pc(a.p_canc)}</strong> dos dias previstos.</p>
+<div class="btns">{botao_ao_vivo(c, n)}{B.link_rota(o, d, "Ver a rota " + esc(B.cod(o)) + " → " + esc(B.cod(d))).replace("<a ", '<a class="btn sec" ', 1) if (o, d) in B.pag_rotas else ""}</div></section>
 <div class="tiles">{tile("Chegou no horário", pc(a.p_pont), "até 30 min de atraso")}{tile("Cancelado", pc(a.p_canc), f"{nf(a.canc)} de {nf(a.prev)} previstos")}{tile("Atraso médio quando atrasa", min_txt(a.media_atr), "atrasos acima de 30 min")}{tile("Atrasos acima de 1 hora", pc(a.p_a60), f"{nf(a.b[1] + a.b[2] + a.b[3])} viagens")}</div>
 <section class="card"><div class="card-head"><h2>Trechos deste voo</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Trecho</th><th scope="col">Saída prevista</th><th scope="col">Avião</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelado</th><th scope="col" class="r">Previstos</th></tr></thead><tbody>{"".join(lin_l)}</tbody></table></div></section>
 <div class="grid2">
