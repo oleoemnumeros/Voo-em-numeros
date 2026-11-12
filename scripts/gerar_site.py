@@ -331,8 +331,8 @@ def familia_html() -> str:
             f'<ul>{"".join(itens)}</ul></div>')
 
 
-NAV = [("/", "Início"), ("/companhias/", "Companhias"), ("/aeroportos/", "Aeroportos"), ("/rotas/", "Rotas"),
-       ("/fim-de-ano/", "Fim de ano"), ("/sobre/", "Como funciona")]
+NAV = [("/", "Início"), ("/companhias/", "Companhias"), ("/aeroportos/", "Aeroportos"), ("/rotas/", "Rotas"), ("/mapa/", "Mapa"),
+       ("/fim-de-ano/", "Fim de ano"), ("/direitos/", "Seus direitos"), ("/sobre/", "Como funciona")]
 LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#5B3FC4"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>')
 
@@ -393,7 +393,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <footer><div>
 <span><strong>Voo em Números</strong> · versão beta</span>
 <span>Voos domésticos regulares de passageiros. No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Cancelados contam sobre os voos previstos.</span>
-<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/sobre/">Como funciona</a></span>
+<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a></span>
 </div>{familia_html()}</footer>
 <script src="/assets/app.js?v={v}" defer></script>
 {GOAT}
@@ -532,6 +532,7 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
 <input id="busca" type="search" autocomplete="off" placeholder="Voo (LA 3300), rota (GRU SSA), cidade ou aeroporto"><div id="busca-res" aria-live="polite"></div></div>
 </section>
 {tiles_acc(T, T0)}
+{mapa_card_home(B, aero_pag)}
 <section class="card"><div class="card-head"><h2>Ranking das companhias em {mes}</h2><span class="small">Companhias com mais de {nf(MIN_CIA_RANK)} voos no mês</span></div>
 {tab_cias}
 <p class="nota">No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC.</p></section>
@@ -545,6 +546,7 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
 <p class="nota"><a href="/rotas/">Ver todas as rotas</a></p></section>
 <section class="card"><div class="card-head"><h2>Voos que mais atrasaram</h2><span class="small">Voos com pelo menos {MIN_VOO_RANK} viagens em {mes}</span></div>
 <div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Trecho</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Atraso médio dos atrasados</th></tr></thead><tbody>{piores_voos}</tbody></table></div></section>
+{direitos_card_home()}
 {fim_card(fim)}
 """
     desc = (f"{cap(mes)}: {pc(T.p_pont)} dos voos domésticos chegaram no horário e {pc(T.p_canc)} foram cancelados. "
@@ -638,6 +640,7 @@ def pg_cia(B: Base, c: str, aero_pag, rota_pag, voo_pag) -> str:
 <section class="card"><div class="card-head"><h2>Voos que mais atrasam</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table>{cabv}<tbody>{lin_voos(vs[:10])}</tbody></table></div></section>
 <section class="card"><div class="card-head"><h2>Voos mais pontuais</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table>{cabv}<tbody>{lin_voos(list(reversed(vs[-10:])))}</tbody></table></div></section>
 </div>
+{aviso_direitos()}
 {faq}"""
     return pagina(B, f"/companhias/{B.cia_slug(c)}/", f"{nome}: pontualidade e cancelamentos em {mes} | Voo em Números",
                   f"{cap(mes)}: {pc(a.p_pont)} dos voos da {nome} chegaram no horário e {pc(a.p_canc)} foram cancelados. Rotas, aeroportos e voos que mais atrasam.",
@@ -820,6 +823,7 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
 <section class="card"><h2>Por dia da semana</h2>{sem_html}</section>
 </div>
 <section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de voos {co}-{cd} no horário nos últimos 13 meses")}</section>
+{aviso_direitos()}
 {faq}"""
     return pagina(B, f"/rotas/{B.rota_slug(o, d)}/", f"Voos {B.cidade(o)} ({co}) → {B.cidade(d)} ({cd}): atrasos e cancelamentos | Voo em Números",
                   f"{cap(base_txt)}: {pc(a.p_pont)} dos voos {co}–{cd} chegaram no horário e {pc(a.p_canc)} foram cancelados. Veja o voo e a companhia mais pontuais.",
@@ -887,6 +891,7 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 <section class="card"><div class="card-head"><h2>Outros voos {esc(B.cod(o))} → {esc(B.cod(d))}</h2><span class="small">Do mais ao menos pontual</span></div><div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Companhia</th><th scope="col">Saída</th><th scope="col" class="r">No horário</th></tr></thead><tbody>{lin_o}</tbody></table></div></section>
 </div>
 <section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de viagens do voo {cod} no horário nos últimos 13 meses")}</section>
+{aviso_direitos()}
 {faq}"""
     return pagina(B, f"/voos/{B.voo_slug(c, n)}/", f"Voo {cod} ({cia}) {trecho}: atrasos e cancelamentos | Voo em Números",
                   f"Nos últimos 3 meses, o voo {cod} da {cia} ({trecho}) chegou no horário em {pc(a.p_pont)} das vezes e foi cancelado em {pc(a.p_canc)}.",
@@ -1024,6 +1029,239 @@ def pg_sobre(B: Base) -> str:
                   corpo, "/sobre/", migalhas=[("", "Como funciona")], jsonld=[ld])
 
 
+# ---------------------------------------------------------------- direitos do passageiro
+DIREITOS_REVISAO = "12/11/2026"
+FONTES_DIREITOS = [
+    ("Agência gov: Anac atualiza regras sobre atrasos e cancelamentos",
+     "https://agenciagov.ebc.com.br/noticias/202609/anac-atualiza-regras-sobre-atrasos-e-cancelamentos-e-amplia-deveres-de-informacao-aos-passageiros"),
+    ("ANAC, Agência Nacional de Aviação Civil", "https://www.gov.br/anac/pt-br"),
+    ("consumidor.gov.br, canal oficial de reclamações", "https://www.consumidor.gov.br/"),
+]
+
+
+def aviso_direitos() -> str:
+    return ('<section class="card aviso"><div><h2>Seu voo atrasou ou foi cancelado?</h2>'
+            '<p>A companhia precisa oferecer alimentação, hospedagem e opções de reacomodação ou reembolso, conforme o tempo de espera. '
+            'Veja o que você pode exigir.</p></div><div class="btns"><a class="btn" href="/direitos/">Ver meus direitos</a></div></section>')
+
+
+def direitos_card_home() -> str:
+    return ('<section class="card dark"><h2>Voo atrasado ou cancelado? Veja seus direitos</h2>'
+            '<p>Alimentação a partir de 2 horas, hospedagem a partir de 4, reembolso e reacomodação. As regras da ANAC em vigor desde 26 de outubro de 2026, em linguagem simples.</p>'
+            '<div class="btns"><a class="btn" href="/direitos/" style="background:#F2B33D;color:#14161A">Ler o guia</a></div></section>')
+
+
+def pg_direitos(B: Base) -> str:
+    T = B.tot[B.ref]
+    mes = mes_nome(B.ref)
+    n_a1 = T.b[1] + T.b[2] + T.b[3]
+    n_a2 = T.b[2] + T.b[3]
+    n_a4 = T.b[3]
+    p1, p2, p4 = (n_a1 / T.med if T.med else None), (n_a2 / T.med if T.med else None), (n_a4 / T.med if T.med else None)
+    dados = f"""<section class="card"><div class="card-head"><h2>Isso acontece com que frequência?</h2><span class="small">Voos domésticos em {mes}</span></div>
+<div class="tiles">{tile("Atraso acima de 1 hora", pc(p1), f"{nf(n_a1)} voos")}{tile("Atraso acima de 2 horas", pc(p2), f"{nf(n_a2)} voos")}{tile("Atraso acima de 4 horas", pc(p4), f"{nf(n_a4)} voos")}{tile("Voos cancelados", pc(T.p_canc), f"{nf(T.canc)} voos")}</div>
+<p class="nota">Atraso medido na chegada, com os dados da ANAC. O tempo que você espera no aeroporto pode ser diferente. Os direitos abaixo contam a partir da espera no aeroporto.</p></section>"""
+    tabela = """<section class="card"><h2>O que a companhia deve oferecer, hora a hora</h2>
+<div class="tw"><table class="direitos"><thead><tr><th scope="col">Situação</th><th scope="col">O que você pode exigir</th></tr></thead><tbody>
+<tr><td><b>Assim que o problema é conhecido</b></td><td>Informação clara, por canais digitais e no aeroporto: o que houve, a nova previsão de partida, as alternativas de reacomodação e como pedir assistência. A informação deve mostrar data e hora da última atualização.</td></tr>
+<tr><td><b>Mais de 2 horas de espera</b></td><td>Alimentação adequada: crédito para alimentação, refeição ou solução equivalente.</td></tr>
+<tr><td><b>Mais de 4 horas de espera</b></td><td>Você escolhe entre ser reacomodado em outro voo, receber o reembolso integral da passagem ou seguir viagem por outro meio de transporte. Se for preciso passar a noite, a companhia paga hospedagem e transporte de ida e volta. Se você mora na cidade, pode ficar só com o transporte.</td></tr>
+<tr><td><b>Voo cancelado ou interrompido</b></td><td>As mesmas opções: reacomodação, reembolso integral ou outro meio de transporte. A assistência (alimentação, hospedagem e transporte) segue a mesma escala de tempo de espera.</td></tr>
+</tbody></table></div>
+<p class="nota">A assistência continua obrigatória mesmo quando o atraso ou o cancelamento vem de mau tempo ou outro caso de força maior. O que muda nesses casos é a discussão sobre indenização, que segue a lei e pode ser decidida na Justiça.</p></section>"""
+    blocos = """<div class="grid2">
+<section class="card"><h2>Overbooking (embarque negado)</h2>
+<p>É a preterição: a companhia vendeu mais passagens do que lugares. Ela deve procurar voluntários antes de negar o embarque a alguém. Quem é impedido de embarcar tem direito a assistência material, às opções de reacomodação, reembolso ou outro transporte e à informação por escrito, se pedir.</p></section>
+<section class="card"><h2>Bagagem extraviada</h2>
+<p>A companhia tem até 7 dias para localizar e entregar a bagagem em voos domésticos, e até 21 dias em voos internacionais. Registre o problema no balcão da companhia ainda no aeroporto, antes de sair, e guarde o protocolo.</p></section>
+<section class="card"><h2>Se você pagou do próprio bolso</h2>
+<p>Em situações excepcionais, como limitação de infraestrutura do aeroporto ou falta comprovada de fornecedores locais, a companhia pode não conseguir prestar a assistência diretamente. Nesses casos ela reembolsa alimentação, transporte e hospedagem necessários e razoáveis, em até 7 dias depois de você apresentar os comprovantes. Guarde todas as notas.</p></section>
+<section class="card"><h2>E a indenização?</h2>
+<p>As regras da ANAC definem assistência, reacomodação e reembolso. A indenização por danos morais ou materiais depende de cada caso e de como a lei e os tratados se aplicam. Quando a companhia não presta a assistência devida, muitos passageiros recorrem ao Juizado Especial Cível. Não dá para prometer resultado.</p></section>
+</div>"""
+    passos = """<section class="card"><h2>Passo a passo para reclamar</h2>
+<ol class="passos">
+<li><b>Guarde as provas.</b> Cartão de embarque, e-mails e mensagens da companhia, prints do aplicativo com o horário, notas fiscais e fotos. Anote a hora em que o atraso foi informado.</li>
+<li><b>Peça a assistência na hora.</b> Procure o balcão da companhia no aeroporto. Se não resolver, fale com o setor de atendimento da administração do aeroporto.</li>
+<li><b>Reclame na companhia</b> pelo SAC e guarde o número do protocolo.</li>
+<li><b>Sem solução, registre na ANAC</b> pela plataforma de reclamações da agência e, se quiser, no consumidor.gov.br e no Procon da sua cidade.</li>
+<li><b>Procure a Justiça se precisar</b> pedir indenização. Causas de menor valor correm no Juizado Especial Cível, e até 20 salários mínimos não exigem advogado.</li>
+</ol></section>"""
+    mudou = """<section class="card"><h2>O que mudou em outubro de 2026</h2>
+<p>A Resolução 813/2026 da ANAC alterou a Resolução 400/2016 e passou a valer em 26 de outubro de 2026. Em resumo:</p>
+<ul>
+<li>A companhia deve avisar, antes da compra, que o voo pode mudar por clima e requisitos de segurança.</li>
+<li>Em atrasos, cancelamentos e interrupções, a companhia deve informar por canais digitais e manter os dados atualizados.</li>
+<li>Foi criado o reembolso de despesas pagas pelo passageiro nas situações excepcionais descritas acima.</li>
+<li>Em eventos de grande impacto, a ANAC pode definir regras temporárias para a assistência.</li>
+<li>Os prazos de alimentação (2 horas) e hospedagem (4 horas) continuam os mesmos. A regra antiga que falava em comunicação gratuita após 1 hora foi retirada do texto.</li>
+</ul></section>"""
+    pares = [
+        ("Quanto tempo de atraso dá direito a alimentação?",
+         "A partir de 2 horas de espera a companhia deve oferecer alimentação adequada, em crédito, refeição ou solução equivalente."),
+        ("Quando a companhia deve pagar hotel?",
+         "Depois de 4 horas de espera, se for preciso passar a noite, a companhia deve oferecer hospedagem e transporte de ida e volta. Quem mora na cidade pode ficar só com o transporte."),
+        ("O que fazer quando o voo atrasa mais de 4 horas?",
+         "Você escolhe entre reacomodação em outro voo, reembolso integral da passagem ou execução do serviço por outro meio de transporte."),
+        ("Mau tempo muda o direito à assistência?",
+         "Não. A assistência material é obrigatória mesmo em caso fortuito ou força maior. A discussão sobre indenização é que depende da lei e do caso."),
+        ("Em quanto tempo a bagagem extraviada deve ser entregue?",
+         "Em até 7 dias nos voos domésticos e até 21 dias nos internacionais."),
+        ("Como reclamar de uma companhia aérea?",
+         "Guarde as provas, peça a assistência no balcão, registre a reclamação no SAC da companhia e, sem solução, na plataforma da ANAC ou no consumidor.gov.br."),
+    ]
+    faq, ld = faq_html(pares)
+    fontes = '<section class="card"><h2>Fontes</h2><ul class="fontes">' + "".join(
+        f'<li><a href="{u}" rel="noopener nofollow" target="_blank">{esc(t)}</a></li>' for t, u in FONTES_DIREITOS) + \
+        f'</ul><p class="nota">Texto revisado em {DIREITOS_REVISAO}, com base na Resolução 400/2016 da ANAC e nas alterações da Resolução 813/2026. ' \
+        'É um guia informativo em linguagem simples e não substitui o texto oficial nem a orientação de um advogado. ' \
+        'O Voo em Números não tem ligação com a ANAC nem com as companhias aéreas.</p></section>'
+    corpo = f"""<section class="hero"><span class="kicker">Guia · regras da ANAC em vigor desde 26/10/2026</span>
+<h1>Voo atrasado ou cancelado: quais são seus direitos</h1>
+<p class="lead">Quanto você espera no aeroporto define o que a companhia aérea precisa oferecer. Aqui está o resumo do que vale hoje, com o que muda em cada caso e como reclamar.</p>
+<div class="btns"><a class="btn" href="/companhias/">Ver quais companhias mais atrasam</a><a class="btn sec" href="/mapa/">Ver o mapa de pontualidade</a></div></section>
+{dados}
+{tabela}
+{blocos}
+{passos}
+{mudou}
+{faq}
+{fontes}"""
+    return pagina(B, "/direitos/", "Voo atrasado ou cancelado: seus direitos (regras da ANAC 2026) | Voo em Números",
+                  "O que a companhia aérea deve oferecer quando o voo atrasa ou é cancelado: alimentação após 2 horas, hospedagem após 4, reembolso e reacomodação. Regras da ANAC em vigor desde 26/10/2026.",
+                  corpo, "/direitos/", migalhas=[("", "Direitos do passageiro")], jsonld=[ld])
+
+
+# ---------------------------------------------------------------- mapa
+MAPA_LON0, MAPA_LAT0, MAPA_ESC = -74.2, 5.4, 14.5
+MAPA_COS = 0.966
+MAPA_W, MAPA_H = 575, 585
+FAIXAS_MAPA = [  # (limite inferior, cor, rótulo)
+    (0.92, "#1D4E89", "92% ou mais"),
+    (0.89, "#6FA8DC", "89% a 92%"),
+    (0.86, "#F0A35E", "86% a 89%"),
+    (0.0, "#B4380B", "menos de 86%"),
+]
+
+
+def mapa_xy(lon: float, lat: float):
+    return (lon - MAPA_LON0) * MAPA_COS * MAPA_ESC, (MAPA_LAT0 - lat) * MAPA_ESC
+
+
+def cor_pont(p: float) -> str:
+    for lim, cor, _ in FAIXAS_MAPA:
+        if p >= lim:
+            return cor
+    return FAIXAS_MAPA[-1][1]
+
+
+def pontos_mapa(B: Base, aero_pag):
+    """Aeroportos com coordenadas e volume suficiente no último mês."""
+    res = []
+    for o in aero_pag:
+        x = B.aero[B.ref].get(o)
+        g = B.iata.get(o, {})
+        if not x or x.prev < 60 or x.med < 30 or "lat" not in g:
+            continue
+        res.append((o, x, g["lat"], g["lon"]))
+    res.sort(key=lambda t: -t[1].prev)
+    return res
+
+
+def svg_mapa(B: Base, aero_pag, compacto: bool = False) -> str:
+    est = json.loads((RAIZ / "data" / "brasil_estados.json").read_text(encoding="utf-8"))
+    caminhos = []
+    for uf, polys in est.items():
+        d = ""
+        for ring in polys:
+            d += "M" + "L".join(f"{mapa_xy(lon, lat)[0]:.1f},{mapa_xy(lon, lat)[1]:.1f}" for lon, lat in ring) + "Z"
+        caminhos.append(f'<path d="{d}"/>')
+    pts = pontos_mapa(B, aero_pag)
+    pontos, rotulos, usados = [], [], []
+    for o, x, lat, lon in pts:
+        cx, cy = mapa_xy(lon, lat)
+        r = max(3.2, min(13, (x.prev ** 0.5) * 0.19))
+        nome = f"{B.cod(o)} · {B.aero_nome(o)}: {pc(x.p_pont)} no horário, {pc(x.p_canc)} cancelados"
+        pontos.append(f'<a href="/aeroportos/{B.aero_slug(o)}/"><circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r:.1f}" fill="{cor_pont(x.p_pont)}" '
+                      f'fill-opacity=".88" stroke="#fff" stroke-width="1"><title>{esc(nome)}</title></circle></a>')
+    # rótulos dos maiores aeroportos, sem sobreposição
+    for o, x, lat, lon in pts[:40]:
+        if len(rotulos) >= (9 if compacto else 14):
+            break
+        cx, cy = mapa_xy(lon, lat)
+        r = max(3.2, min(13, (x.prev ** 0.5) * 0.19))
+        caixa = (cx + r + 2, cy - 6, cx + r + 2 + 24, cy + 6)
+        if any(not (caixa[2] < u[0] or caixa[0] > u[2] or caixa[3] < u[1] or caixa[1] > u[3]) for u in usados):
+            continue
+        if caixa[2] > MAPA_W:
+            continue
+        usados.append(caixa)
+        rotulos.append(f'<text x="{caixa[0]:.1f}" y="{cy + 4:.1f}">{esc(B.cod(o))}</text>')
+    # pontos de aeroportos sem rótulo já cobertos pelo caixa; bolinhas por cima do desenho
+    return (f'<svg class="mapa-svg" viewBox="0 0 {MAPA_W} {MAPA_H}" role="img" aria-label="Mapa do Brasil com os aeroportos coloridos pela pontualidade dos voos em {mes_nome(B.ref)}">'
+            f'<g class="estados">{"".join(caminhos)}</g><g>{"".join(pontos)}</g><g class="rot">{"".join(rotulos)}</g></svg>')
+
+
+def legenda_mapa() -> str:
+    return ('<ul class="legenda">' + "".join(
+        f'<li><i style="background:{cor}"></i>{rot}</li>' for _, cor, rot in FAIXAS_MAPA) + '</ul>'
+        '<p class="nota">Cor = percentual de partidas que chegaram no horário. Tamanho = número de voos. Toque ou clique em um aeroporto para ver os detalhes.</p>')
+
+
+def mapa_card_home(B: Base, aero_pag) -> str:
+    return (f'<section class="card"><div class="card-head"><h2>Mapa da pontualidade</h2><span class="small">Aeroportos de partida em {mes_nome(B.ref)}</span></div>'
+            f'<div class="mapa-box">{svg_mapa(B, aero_pag, True)}</div>{legenda_mapa()}'
+            '<div class="btns"><a class="btn sec" href="/mapa/">Abrir o mapa completo e o ranking por estado</a></div></section>')
+
+
+def pg_mapa(B: Base, aero_pag) -> str:
+    mes = mes_nome(B.ref)
+    pts = pontos_mapa(B, aero_pag)
+    grandes = [t for t in pts if t[1].prev >= MIN_AERO_RANK]
+    grandes.sort(key=lambda t: -(t[1].p_pont or 0))
+
+    def lista(lst):
+        return '<ul class="rank">' + "".join(
+            f'<li><span><a href="/aeroportos/{B.aero_slug(o)}/">{esc(B.cod(o))}</a> <span class="small">{esc(B.aero_nome(o))}</span></span>'
+            f'<span class="num"><b>{pc(x.p_pont)}</b></span></li>' for o, x, _, _ in lst) + "</ul>"
+    # por estado
+    por_uf = defaultdict(Acc)
+    for o, x in B.aero[B.ref].items():
+        uf = B.uf(o)
+        if uf and len(uf) == 2:
+            por_uf[uf].soma(x)
+    ufs = [(uf, a) for uf, a in por_uf.items() if a.prev >= 300 and a.med]
+    ufs.sort(key=lambda t: -(t[1].p_pont or 0))
+    lin_uf = "".join(f'<tr><td><b>{esc(uf)}</b></td><td style="min-width:200px">{meter(a.p_pont)}</td>'
+                     f'<td class="r num">{pc(a.p_canc)}</td><td class="r num">{nf(a.prev)}</td></tr>' for uf, a in ufs)
+    melhor, pior = (grandes[0], grandes[-1]) if grandes else (None, None)
+    lead = f"Cada bolinha é um aeroporto brasileiro, colorido pela pontualidade das partidas em {mes}."
+    if melhor and pior:
+        lead += (f" Entre os grandes, <strong>{esc(B.cidade(melhor[0]))}</strong> teve a maior pontualidade ({pc(melhor[1].p_pont)}) "
+                 f"e <strong>{esc(B.cidade(pior[0]))}</strong> a menor ({pc(pior[1].p_pont)}).")
+    pares = [("Qual aeroporto do Brasil é mais pontual?",
+              (f"Em {mes}, entre os aeroportos com mais de {nf(MIN_AERO_RANK)} partidas, {B.nome_cod(melhor[0])} teve a maior pontualidade: {pc(melhor[1].p_pont)} das partidas chegaram ao destino no horário." if melhor else "")),
+             ("Qual estado tem os voos mais pontuais?",
+              (f"Em {mes}, as partidas de aeroportos de {ufs[0][0]} foram as mais pontuais, com {pc(ufs[0][1].p_pont)} chegando no horário." if ufs else ""))]
+    pares = [p for p in pares if p[1]]
+    faq, ld = faq_html(pares)
+    corpo = f"""<section class="hero"><span class="kicker">Mapa · {mes}</span><h1>Mapa da pontualidade dos aeroportos do Brasil</h1>
+<p class="lead">{lead}</p></section>
+<section class="card"><div class="mapa-box grande">{svg_mapa(B, aero_pag)}</div>{legenda_mapa()}</section>
+<div class="grid2">
+<section class="card"><h2>Grandes aeroportos mais pontuais</h2>{lista(grandes[:8])}<p class="nota">Aeroportos com mais de {nf(MIN_AERO_RANK)} partidas em {mes}.</p></section>
+<section class="card"><h2>Grandes aeroportos menos pontuais</h2>{lista(list(reversed(grandes[-8:])))}<p class="nota"><a href="/aeroportos/">Ver todos os aeroportos</a></p></section>
+</div>
+<section class="card"><div class="card-head"><h2>Pontualidade por estado</h2><span class="small">Partidas do estado em {mes}</span></div>
+<div class="tw"><table><thead><tr><th scope="col">Estado</th><th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Partidas</th></tr></thead><tbody>{lin_uf}</tbody></table></div>
+<p class="nota">Estados com pelo menos 300 partidas no mês. O estado é o do aeroporto de partida.</p></section>
+{aviso_direitos()}
+{faq}"""
+    return pagina(B, "/mapa/", f"Mapa da pontualidade dos aeroportos do Brasil: {mes} | Voo em Números",
+                  f"Mapa com a pontualidade das partidas em cada aeroporto brasileiro em {mes} e ranking por estado. Dados oficiais da ANAC.",
+                  corpo, "/mapa/", migalhas=[("", "Mapa")], jsonld=[ld] if pares else [])
+
+
 def pg_404(B: Base) -> str:
     corpo = ('<section class="hero"><h1>Página não encontrada</h1><p class="lead">Este endereço não existe ou o voo deixou de operar. '
              'Use a busca para achar um voo, uma rota ou um aeroporto.</p>'
@@ -1157,11 +1395,14 @@ def main() -> int:
         pub(f"/voos/{B.voo_slug(*k)}/", pg_voo(B, k, voo_pag[k], voo_pag), "0.5")
     if fim:
         pub("/fim-de-ano/", pg_fim(B, fim, aero_pag), "0.9")
+    pub("/direitos/", pg_direitos(B), "0.9")
+    pub("/mapa/", pg_mapa(B, aero_pag), "0.8")
     pub("/sobre/", pg_sobre(B), "0.3")
     escreve("/404.html", pg_404(B))
 
     # busca
-    idx = []
+    idx = [["Seus direitos: voo atrasado ou cancelado, overbooking, bagagem", "guia", "/direitos/"],
+           ["Mapa da pontualidade dos aeroportos do Brasil por estado", "mapa", "/mapa/"]]
     for c in cias_pag:
         idx.append([B.cia_nome(c), "companhia", f"/companhias/{B.cia_slug(c)}/"])
     for a in sorted(aero_pag, key=lambda a: -B.soma(B.aero, a, B.u3).prev):

@@ -128,3 +128,24 @@ footer .familia em{font-style:normal;font-size:12px;color:#9CA3AF;border:1px sol
   td,th{padding:8px 7px}
   table{font-size:14px}
 }
+
+/* direitos e mapa */
+.card.aviso{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;background:var(--acc-l);border-color:#D6CEF3}
+.card.aviso h2{font-size:19px}
+.card.aviso p{color:var(--acc-ink);font-size:15px;max-width:680px;margin-top:4px}
+table.direitos td,table.direitos th{white-space:normal;vertical-align:top}
+table.direitos td:first-child{min-width:130px;width:28%}
+.passos{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px;color:var(--ink2)}
+.card ul:not(.rank):not(.legenda):not(.fontes){margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;color:var(--ink2)}
+.card p+ul{margin-top:4px}
+.fontes{margin:0;padding-left:20px}
+.mapa-box{max-width:520px;width:100%;margin:0 auto}
+.mapa-box.grande{max-width:680px}
+.mapa-svg{width:100%;height:auto;display:block}
+.mapa-svg .estados path{fill:#ECE9F6;stroke:#fff;stroke-width:.8}
+.mapa-svg circle{cursor:pointer;transition:stroke-width .1s}
+.mapa-svg a:hover circle,.mapa-svg a:focus circle{stroke:#14161A;stroke-width:2}
+.mapa-svg .rot text{font:600 10.5px Inter,system-ui,sans-serif;fill:#14161A;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round;pointer-events:none}
+.legenda{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px;color:var(--ink2);justify-content:center}
+.legenda li{display:flex;align-items:center;gap:7px}
+.legenda i{width:14px;height:14px;border-radius:50%;display:inline-block}
