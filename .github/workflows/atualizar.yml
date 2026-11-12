@@ -33,6 +33,10 @@ jobs:
   atualizar:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    # O site é publicado direto pelo Actions; as páginas (docs/) não ficam no repositório.
+    environment:
+      name: github-pages
+      url: ${{ steps.publicar.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +45,7 @@ jobs:
           python-version: "3.12"
 
       - name: Instalar dependências
-        run: pip install requests==2.32.3
+        run: pip install requests==2.32.3 pillow==11.3.0
 
       - name: Baixar dados da ANAC
         id: robo
@@ -49,6 +53,10 @@ jobs:
         env:
           FORCAR: ${{ (github.event_name == 'workflow_dispatch' && inputs.forcar) && '1' || '0' }}
         run: python scripts/atualizar.py
+
+      - name: Gerar site
+        if: always()
+        run: python scripts/gerar_site.py
 
       - name: Salvar no repositório
         if: always()
@@ -62,6 +70,17 @@ jobs:
             git commit -m "Dados atualizados: $(date -u +%Y-%m-%d)"
             git push
           fi
+
+      - name: Empacotar site
+        if: always()
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Publicar no GitHub Pages
+        id: publicar
+        if: always()
+        uses: actions/deploy-pages@v4
 
       - name: Falhar se o robô falhou
         if: steps.robo.outcome == 'failure'
