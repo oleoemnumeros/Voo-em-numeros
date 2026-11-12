@@ -1,0 +1,192 @@
+{
+ "execucao": "2026-11-12T20:27:40+00:00",
+ "meses": {
+  "2024-12": {
+   "linhas": 85919,
+   "domesticos": 67641,
+   "confere": 65240,
+   "sem_previsto": 1325,
+   "atraso_absurdo": 1,
+   "carga": 72
+  },
+  "2025-01": {
+   "linhas": 89616,
+   "domesticos": 69666,
+   "confere": 67844,
+   "sem_previsto": 1262,
+   "atraso_absurdo": 8,
+   "outro_mes": 3,
+   "carga": 56
+  },
+  "2025-02": {
+   "linhas": 78930,
+   "domesticos": 60872,
+   "confere": 59299,
+   "sem_previsto": 1178,
+   "outro_mes": 3,
+   "carga": 309
+  },
+  "2025-03": {
+   "linhas": 82048,
+   "domesticos": 63872,
+   "confere": 63024,
+   "sem_previsto": 1017,
+   "diverge": 2,
+   "outro_mes": 3,
+   "carga": 391
+  },
+  "2025-04": {
+   "linhas": 80692,
+   "domesticos": 63577,
+   "confere": 62448,
+   "sem_previsto": 1118,
+   "outro_mes": 3,
+   "carga": 386
+  },
+  "2025-05": {
+   "linhas": 82565,
+   "domesticos": 65523,
+   "confere": 64816,
+   "sem_previsto": 971,
+   "atraso_absurdo": 2,
+   "outro_mes": 3,
+   "carga": 354
+  },
+  "2025-06": {
+   "linhas": 80974,
+   "domesticos": 64280,
+   "confere": 63275,
+   "sem_previsto": 995,
+   "diverge": 1,
+   "carga": 199,
+   "outro_mes": 1
+  },
+  "2025-07": {
+   "linhas": 87725,
+   "domesticos": 68244,
+   "confere": 67102,
+   "sem_previsto": 1144,
+   "outro_mes": 4,
+   "carga": 249
+  },
+  "2025-08": {
+   "linhas": 84583,
+   "domesticos": 66315,
+   "confere": 65512,
+   "sem_previsto": 928,
+   "diverge": 1,
+   "carga": 267
+  },
+  "2025-09": {
+   "linhas": 82156,
+   "domesticos": 65103,
+   "confere": 64088,
+   "sem_previsto": 854,
+   "carga": 253,
+   "outro_mes": 2
+  },
+  "2025-10": {
+   "linhas": 85709,
+   "domesticos": 67334,
+   "confere": 66392,
+   "sem_previsto": 1637,
+   "diverge": 1,
+   "carga": 292
+  },
+  "2025-11": {
+   "linhas": 82245,
+   "domesticos": 63190,
+   "confere": 62384,
+   "atraso_absurdo": 2,
+   "sem_previsto": 2263,
+   "carga": 293
+  },
+  "2025-12": {
+   "linhas": 88564,
+   "domesticos": 68538,
+   "confere": 66575,
+   "sem_previsto": 1651,
+   "atraso_absurdo": 2,
+   "carga": 280,
+   "outro_mes": 1
+  },
+  "2026-01": {
+   "linhas": 91650,
+   "domesticos": 69735,
+   "confere": 68513,
+   "sem_previsto": 1196,
+   "carga": 246,
+   "outro_mes": 2
+  },
+  "2026-02": {
+   "linhas": 79457,
+   "domesticos": 59942,
+   "confere": 58916,
+   "sem_previsto": 1016,
+   "carga": 232,
+   "outro_mes": 2
+  },
+  "2026-03": {
+   "linhas": 87200,
+   "domesticos": 66930,
+   "confere": 66074,
+   "sem_previsto": 1092,
+   "carga": 293,
+   "atraso_absurdo": 1,
+   "outro_mes": 2
+  },
+  "2026-04": {
+   "linhas": 80377,
+   "domesticos": 62982,
+   "confere": 61970,
+   "sem_previsto": 1094,
+   "carga": 279,
+   "outro_mes": 3
+  },
+  "2026-05": {
+   "linhas": 82098,
+   "domesticos": 64600,
+   "confere": 63677,
+   "sem_previsto": 1013,
+   "carga": 266,
+   "atraso_absurdo": 1,
+   "outro_mes": 2
+  },
+  "2026-06": {
+   "linhas": 81119,
+   "domesticos": 63445,
+   "confere": 62184,
+   "sem_previsto": 1155,
+   "diverge": 1,
+   "carga": 220,
+   "outro_mes": 3
+  },
+  "2026-07": {
+   "linhas": 89489,
+   "domesticos": 68798,
+   "confere": 67622,
+   "sem_previsto": 1216,
+   "carga": 285,
+   "outro_mes": 2,
+   "diverge": 1
+  },
+  "2026-08": {
+   "linhas": 88013,
+   "domesticos": 68648,
+   "confere": 67567,
+   "sem_previsto": 1112,
+   "diverge": 1,
+   "carga": 260,
+   "outro_mes": 1
+  },
+  "2026-09": {
+   "linhas": 85845,
+   "domesticos": 67557,
+   "confere": 65544,
+   "sem_previsto": 1284,
+   "carga": 260,
+   "outro_mes": 2
+  }
+ },
+ "novos": 22
+}
