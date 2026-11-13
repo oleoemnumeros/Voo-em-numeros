@@ -394,7 +394,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <footer><div>
 <span><strong>Voo em Números</strong> · versão beta</span>
 <span>Voos domésticos regulares de passageiros. No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Cancelados contam sobre os voos previstos.</span>
-<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a></span>
+<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a></span>
 </div>{familia_html()}</footer>
 <script src="/assets/app.js?v={v}" defer></script>
 {GOAT}
@@ -1023,6 +1023,65 @@ def pg_fim(B: Base, fim, aero_pag) -> str:
                   corpo, "/fim-de-ano/", migalhas=[("", "Fim de ano")], jsonld=[ld])
 
 
+# Sugestões e críticas: a mensagem chega por e-mail via FormSubmit (sem cadastro e sem servidor próprio).
+# Para esconder o e-mail do HTML, troque FORM_EMAIL pelo código aleatório que o FormSubmit envia após a ativação.
+FORM_EMAIL = "oleoemnumeros@gmail.com"
+FORM_JS = """<script>
+(function () {
+  var f = document.getElementById("sug"); if (!f || !window.fetch) return;
+  var msg = document.getElementById("sug-msg"), ok = document.getElementById("enviado"), b = f.querySelector("button");
+  try { var r = document.referrer; if (r && new URL(r).host === location.host && r.indexOf("/sugestoes/") < 0) f.elements.pagina.value = r; } catch (e) {}
+  f.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    if (f.elements._honey.value) return;
+    b.disabled = true; msg.textContent = "Enviando…";
+    var d = {}; new FormData(f).forEach(function (v, k) { if (k !== "_next") d[k] = v; });
+    fetch("https://formsubmit.co/ajax/__EMAIL__", {method: "POST", headers: {"Content-Type": "application/json", "Accept": "application/json"}, body: JSON.stringify(d)})
+      .then(function (x) { return x.json(); })
+      .then(function (j) {
+        if (j && (j.success === true || j.success === "true")) { ok.className += " on"; f.hidden = true; ok.focus(); }
+        else throw new Error("falhou");
+      })
+      .catch(function () { b.disabled = false; msg.textContent = "Não foi possível enviar agora. Tente de novo em instantes ou escreva para __EMAIL__."; });
+  });
+})();
+</script>"""
+
+
+def form_sugestoes(nome_site: str, base: str) -> str:
+    """Corpo da página /sugestoes/: formulário com envio sem sair da página e alternativa sem JavaScript."""
+    return (
+        '<p class="lede">Viu um erro, sentiu falta de um dado ou tem uma ideia? Escreva aqui. Cada mensagem chega ao e-mail do portal e é lida por uma pessoa.</p>'
+        '<div class="sug-ok" id="enviado" tabindex="-1" role="status"><strong>Mensagem enviada. Obrigado!</strong>'
+        '<p>Lemos todas. Se você deixou um e-mail, a resposta vai para ele.</p></div>'
+        f'<form class="sug" id="sug" method="post" action="https://formsubmit.co/{FORM_EMAIL}">'
+        '<label>Tipo de mensagem<select name="tipo"><option>Sugestão</option><option>Crítica</option>'
+        '<option>Erro em um dado ou página</option><option>Outro assunto</option></select></label>'
+        '<label>Sua mensagem<textarea name="mensagem" required minlength="10" maxlength="3000" rows="6" placeholder="Conte o que você viu, sentiu falta ou sugere. Se for um erro, diga a página e o número."></textarea></label>'
+        '<label><span>Seu nome <span class="opc">(opcional)</span></span><input name="nome" maxlength="80" autocomplete="name"></label>'
+        '<label><span>Seu e-mail, se quiser resposta <span class="opc">(opcional)</span></span><input type="email" name="email" maxlength="120" autocomplete="email"></label>'
+        f'<input type="hidden" name="_subject" value="[{esc(nome_site)}] Sugestão ou crítica">'
+        '<input type="hidden" name="_template" value="table">'
+        f'<input type="hidden" name="_next" value="{base}/sugestoes/#enviado">'
+        f'<input type="hidden" name="site" value="{esc(nome_site)}">'
+        '<input type="hidden" name="pagina" value="">'
+        '<input class="hp" type="text" name="_honey" tabindex="-1" autocomplete="off" aria-hidden="true">'
+        '<button type="submit">Enviar mensagem</button>'
+        '<p class="sug-msg" id="sug-msg" role="status" aria-live="polite"></p></form>'
+        '<p class="small">O envio passa pelo serviço FormSubmit (formsubmit.co), que entrega a mensagem ao e-mail do portal. '
+        'Não pedimos cadastro nem guardamos mais nada além do que você escrever. '
+        f'Se preferir, escreva direto para <a href="mailto:{FORM_EMAIL}">{FORM_EMAIL}</a>.</p>'
+        + FORM_JS.replace("__EMAIL__", FORM_EMAIL))
+
+
+def pg_sugestoes(B: Base) -> str:
+    corpo = ('<section class="hero"><h1>Sugestões e críticas</h1></section><section class="card prose">'
+             + form_sugestoes("Voo em Números", BASE) + "</section>")
+    return pagina(B, "/sugestoes/", "Sugestões e críticas | Voo em Números",
+                  "Envie uma sugestão, crítica ou correção para o Voo em Números. A mensagem chega por e-mail e é lida por uma pessoa.",
+                  corpo, "/sugestoes/", migalhas=[("", "Sugestões e críticas")])
+
+
 def pg_sobre(B: Base) -> str:
     corpo = f"""<section class="hero"><h1>Como funciona</h1></section>
 <section class="card prose">
@@ -1043,7 +1102,7 @@ def pg_sobre(B: Base) -> str:
 <h2>Limitações</h2>
 <p>A base não informa o motivo do atraso ou do cancelamento, nem diferencia cancelamentos avisados com antecedência dos feitos em cima da hora. Um cancelamento planejado semanas antes, com o passageiro remanejado, conta igual a um cancelamento no dia. Os números descrevem o passado e não garantem o que vai acontecer com um voo específico.</p>
 <h2>Quem faz</h2>
-<p>O Voo em Números faz parte da Família em Números, um grupo de portais independentes que organizam dados públicos do Brasil. Não tem ligação com a ANAC nem com companhias aéreas. Encontrou um erro? Escreva para <a href="mailto:oleoemnumeros@gmail.com">oleoemnumeros@gmail.com</a>.</p>
+<p>O Voo em Números faz parte da Família em Números, um grupo de portais independentes que organizam dados públicos do Brasil. Não tem ligação com a ANAC nem com companhias aéreas. Encontrou um erro ou tem uma sugestão? <a href="/sugestoes/">Use o formulário</a> ou escreva para <a href="mailto:oleoemnumeros@gmail.com">oleoemnumeros@gmail.com</a>.</p>
 </section>"""
     ld = {"@context": "https://schema.org", "@type": "Dataset", "name": "Pontualidade dos voos domésticos no Brasil",
           "description": "Pontualidade e cancelamentos dos voos domésticos regulares no Brasil, por companhia, aeroporto, rota e voo, a partir da base VRA da ANAC.",
@@ -1735,6 +1794,7 @@ def main() -> int:
     if B.dem:
         pub("/demanda/", pg_demanda(B, aero_pag, rota_pag), "0.8")
     pub("/sobre/", pg_sobre(B), "0.3")
+    pub("/sugestoes/", pg_sugestoes(B), "0.2")
     escreve("/404.html", pg_404(B))
 
     # busca
