@@ -331,7 +331,7 @@ def familia_html() -> str:
             f'<ul>{"".join(itens)}</ul></div>')
 
 
-NAV = [("/", "Início"), ("/companhias/", "Companhias"), ("/aeroportos/", "Aeroportos"), ("/rotas/", "Rotas"), ("/mapa/", "Mapa"),
+NAV = [("/", "Início"), ("/companhias/", "Companhias"), ("/aeroportos/", "Aeroportos"), ("/rotas/", "Rotas"), ("/mapa/", "Mapa"), ("/demanda/", "Passageiros"),
        ("/fim-de-ano/", "Fim de ano"), ("/direitos/", "Seus direitos"), ("/sobre/", "Como funciona")]
 LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#5B3FC4"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>')
@@ -393,7 +393,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <footer><div>
 <span><strong>Voo em Números</strong> · versão beta</span>
 <span>Voos domésticos regulares de passageiros. No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Cancelados contam sobre os voos previstos.</span>
-<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a></span>
+<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a></span>
 </div>{familia_html()}</footer>
 <script src="/assets/app.js?v={v}" defer></script>
 {GOAT}
@@ -533,6 +533,7 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
 </section>
 {tiles_acc(T, T0)}
 {mapa_card_home(B, aero_pag)}
+{dem_card_home(B)}
 <section class="card"><div class="card-head"><h2>Ranking das companhias em {mes}</h2><span class="small">Companhias com mais de {nf(MIN_CIA_RANK)} voos no mês</span></div>
 {tab_cias}
 <p class="nota">No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC.</p></section>
@@ -629,6 +630,7 @@ def pg_cia(B: Base, c: str, aero_pag, rota_pag, voo_pag) -> str:
     corpo = f"""<section class="hero"><span class="kicker">Companhia aérea · {mes}</span><h1>{esc(nome)}: pontualidade e cancelamentos</h1>
 <p class="lead">Em {mes}, <strong>{pc(a.p_pont)}</strong> dos voos domésticos da {esc(nome)} chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados.</p></section>
 {tiles_acc(a, a0)}
+{dem_cia(B, c)}
 <section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de voos da {nome} no horário nos últimos 13 meses")}</section>
 <section class="card"><div class="card-head"><h2>Aeroportos com mais atrasos da {esc(nome)}</h2><span class="small">Partidas em {mes}, mínimo de 100</span></div>
 <div class="tw"><table><thead><tr><th scope="col">Aeroporto</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Partidas</th></tr></thead><tbody>{linhas_aer}</tbody></table></div></section>
@@ -707,6 +709,7 @@ def pg_aero(B: Base, o: str, rota_pag, voo_pag) -> str:
     corpo = f"""<section class="hero"><span class="kicker">Aeroporto · {esc(B.uf(o))}</span><h1>{esc(B.nome_cod(o))}: atrasos e cancelamentos</h1>
 <p class="lead">Partidas de voos domésticos regulares. Em {base_txt}, <strong>{pc(a.p_pont)}</strong> chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados.</p></section>
 {tiles_acc(a, a0, "Partidas previstas")}
+{dem_aero(B, o)}
 <section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de partidas de {cod} no horário nos últimos 13 meses")}</section>
 <section class="card"><div class="card-head"><h2>Por companhia em {mes}</h2></div><div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Partidas</th></tr></thead><tbody>{lin_c}</tbody></table></div></section>
 <section class="card"><div class="card-head"><h2>Destinos a partir de {esc(cod)}</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Destino</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_d}</tbody></table></div></section>
@@ -815,6 +818,7 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
 <p class="lead">Em {base_txt}, <strong>{pc(a.p_pont)}</strong> dos voos chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados. {dur}</p>
 <div class="btns">{f'<a class="btn sec" href="/rotas/{B.rota_slug(d, o)}/">Ver a volta: {esc(cd)} → {esc(co)}</a>' if volta else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(o)}/">Aeroporto {esc(co)}</a>' if o in B.pag_aero else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(d)}/">Aeroporto {esc(cd)}</a>' if d in B.pag_aero else ""}</div></section>
 {tiles_acc(a, a0)}
+{dem_rota(B, o, d)}
 <section class="card"><div class="card-head"><h2>Por companhia nesta rota</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Atraso médio dos atrasados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_c}</tbody></table></div></section>
 <section class="card"><div class="card-head"><h2>Os voos desta rota, do mais ao menos pontual</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Companhia</th><th scope="col">Saída prevista</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Atraso médio</th><th scope="col" class="r">Cancelados</th></tr></thead><tbody>{lin_v}</tbody></table></div>
 <p class="nota">Atraso médio = média do atraso na chegada, contando todos os voos realizados (os que chegaram adiantados contam como zero).</p></section>
@@ -1005,6 +1009,8 @@ def pg_sobre(B: Base) -> str:
 <p>O Voo em Números organiza os dados públicos de voos da Agência Nacional de Aviação Civil (ANAC) para mostrar, de forma simples, quanto atrasam e quanto são cancelados os voos domésticos no Brasil, por companhia, aeroporto, rota e número de voo.</p>
 <h2>De onde vêm os dados</h2>
 <p>Da base <strong>Voo Regular Ativo (VRA)</strong>, publicada pela ANAC todo mês, com um registro para cada voo regular previsto: companhia, número do voo, aeroportos, horários previstos e realizados e se o voo foi cancelado. Um robô baixa cada mês novo assim que ele é publicado e atualiza o site sozinho. Os dados atuais vão até {mes_nome(B.ref)}.</p>
+<h2>Passageiros e ocupação</h2>
+<p>Os números de passageiros, assentos e ocupação vêm de outra base da ANAC, a <strong>Dados Estatísticos do Transporte Aéreo</strong>, informada pelas empresas aéreas. Entram voos domésticos regulares e passageiros pagos. Ocupação é passageiros-quilômetros pagos divididos por assentos-quilômetros oferecidos. Essa base chega com cerca de dois meses de atraso e é atualizada pelo robô toda semana.</p>
 <h2>O que entra</h2>
 <ul><li>Voos domésticos regulares de passageiros (linha doméstica, código "N" na base da ANAC).</li>
 <li>Ficam de fora voos internacionais, voos só de carga, táxi aéreo e voos sem horário previsto.</li></ul>
@@ -1262,6 +1268,314 @@ def pg_mapa(B: Base, aero_pag) -> str:
                   corpo, "/mapa/", migalhas=[("", "Mapa")], jsonld=[ld] if pares else [])
 
 
+# ---------------------------------------------------------------- demanda: passageiros e ocupação
+DEM_ARQ = RAIZ / "data" / "demanda.json"
+MIN_PAX_ROTA_RANK = 3000     # passageiros no mês para a rota entrar nos rankings de ocupação
+MIN_PAX_AERO_DISP = 5000     # passageiros embarcados no mês para o aeroporto entrar no gráfico
+
+
+class Dm:
+    """Soma de passageiros, assentos-km (ASK), passageiros-km (RPK), decolagens e assentos."""
+    __slots__ = ("pax", "ask", "rpk", "dec", "ass")
+
+    def __init__(self):
+        self.pax = self.ask = self.rpk = self.dec = self.ass = 0
+
+    def add(self, v):
+        self.pax += v[0]; self.ask += v[1]; self.rpk += v[2]; self.dec += v[3]; self.ass += v[4]
+        return self
+
+    @property
+    def ocup(self):
+        return self.rpk / self.ask if self.ask else None
+
+
+class Demanda:
+    def __init__(self, arq: Path):
+        d = json.loads(arq.read_text(encoding="utf-8"))
+        self.mensal = {m: Dm().add(v) for m, v in d["mensal"].items()}
+        self.meses = sorted(d["linhas"])
+        self.ref = self.meses[-1]
+        self.ant = mes_ant_ano(self.ref)
+        self.atualizado = d.get("atualizado_em")
+        self.cia, self.aero, self.rota = {}, {}, {}
+        for m, lst in d["linhas"].items():
+            C, A, R = defaultdict(Dm), defaultdict(Dm), defaultdict(Dm)
+            for emp, o, dd, *v in lst:
+                C[emp].add(v); A[o].add(v); R[(o, dd)].add(v)
+            self.cia[m], self.aero[m], self.rota[m] = C, A, R
+        ms = sorted(m for m in self.mensal if m <= self.ref)
+        self.u13 = ms[-13:]
+
+
+def abrevia(v: float) -> str:
+    if v >= 1e6:
+        return nf(v / 1e6, 1) + " mi"
+    if v >= 1e4:
+        return nf(v / 1e3, 0) + " mil"
+    return nf(v)
+
+
+def var_pct(a, b) -> str:
+    if not a or not b:
+        return ""
+    v = a / b - 1
+    if abs(v) < 0.0005:
+        return "igual a um ano antes"
+    return f'<span class="{"up" if v > 0 else "down"}">{"▲" if v > 0 else "▼"} {nf(abs(v) * 100, 1)}%</span> contra um ano antes'
+
+
+def tiles_dem(a: Dm, a0) -> str:
+    a0 = a0 if a0 and a0.pax else None
+    return '<div class="tiles">' + "".join([
+        tile("Passageiros pagos", abrevia(a.pax), var_pct(a.pax, a0.pax if a0 else None)),
+        tile("Ocupação dos voos", pc(a.ocup), delta_pp(a.ocup, a0.ocup if a0 else None, True)),
+        tile("Assentos oferecidos", abrevia(a.ass), var_pct(a.ass, a0.ass if a0 else None)),
+        tile("Decolagens", nf(a.dec), var_pct(a.dec, a0.dec if a0 else None)),
+    ]) + "</div>"
+
+
+def bloco_demanda(D, a, a0, titulo: str, nota: str) -> str:
+    if not D or not a or a.pax < 1 or not a.ask:
+        return ""
+    return (f'<section class="card"><div class="card-head"><h2>{titulo}</h2><span class="small">{mes_nome(D.ref)}</span></div>'
+            f'{tiles_dem(a, a0)}<p class="nota">{nota} Ocupação = passageiros-quilômetros pagos ÷ assentos-quilômetros oferecidos. '
+            'Fonte: ANAC, Dados Estatísticos do Transporte Aéreo.</p></section>')
+
+
+def dem_aero(B, o: str) -> str:
+    D = B.dem
+    if not D:
+        return ""
+    return bloco_demanda(D, D.aero[D.ref].get(o), D.aero.get(D.ant, {}).get(o), "Passageiros e ocupação",
+                         f"Passageiros pagos embarcados em {esc(B.cod(o))}, em voos domésticos regulares.")
+
+
+def dem_rota(B, o: str, d: str) -> str:
+    D = B.dem
+    if not D:
+        return ""
+    return bloco_demanda(D, D.rota[D.ref].get((o, d)), D.rota.get(D.ant, {}).get((o, d)), "Passageiros e ocupação",
+                         f"Passageiros pagos no sentido {esc(B.cod(o))} → {esc(B.cod(d))}, somando as companhias.")
+
+
+def dem_cia(B, c: str) -> str:
+    D = B.dem
+    if not D:
+        return ""
+    a = D.cia[D.ref].get(c)
+    part = f" Participação: {pc(a.pax / D.mensal[D.ref].pax)} dos passageiros dos voos domésticos regulares do país." if a and D.mensal[D.ref].pax else ""
+    return bloco_demanda(D, a, D.cia.get(D.ant, {}).get(c), "Passageiros e ocupação", f"Passageiros pagos em voos domésticos regulares.{part}")
+
+
+def dem_card_home(B) -> str:
+    D = B.dem
+    if not D:
+        return ""
+    T, T0 = D.mensal[D.ref], D.mensal.get(D.ant)
+    return (f'<section class="card"><div class="card-head"><h2>Quantos passageiros voam?</h2><span class="small">Voos domésticos regulares em {mes_nome(D.ref)}</span></div>'
+            f'{tiles_dem(T, T0)}<div class="btns"><a class="btn sec" href="/demanda/">Ver passageiros, ocupação e se aeroporto lotado atrasa mais</a></div></section>')
+
+
+def pearson(xs, ys):
+    n = len(xs)
+    if n < 5:
+        return None
+    mx, my = sum(xs) / n, sum(ys) / n
+    sxx = sum((x - mx) ** 2 for x in xs); syy = sum((y - my) ** 2 for y in ys)
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    return sxy / (sxx * syy) ** 0.5 if sxx and syy else None
+
+
+def forca(r: float) -> str:
+    a = abs(r)
+    return "muito fraca" if a < 0.2 else "fraca" if a < 0.4 else "moderada" if a < 0.6 else "forte" if a < 0.8 else "muito forte"
+
+
+def svg_barras_valor(rotulos, valores, fmt, aria="", altura=190, largura=720) -> str:
+    n = len(valores)
+    W, H, top, base = largura, altura, 22, altura - 26
+    mx = max(valores) if valores else 1
+    passo = (W - 20) / n
+    bw = min(46, passo * 0.66)
+    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{esc(aria)}">',
+           f'<line x1="10" y1="{base}" x2="{W - 10}" y2="{base}" stroke="#C9C6D6"/>']
+    for i, (r, v) in enumerate(zip(rotulos, valores)):
+        x = 10 + i * passo + (passo - bw) / 2
+        h = max(2, v / mx * (base - top))
+        ult = i == n - 1
+        out.append(f'<rect x="{x:.1f}" y="{base - h:.1f}" width="{bw:.1f}" height="{h:.1f}" rx="3" fill="{"#5B3FC4" if ult else "#B9AEE8"}"/>')
+        out.append(f'<text x="{x + bw / 2:.1f}" y="{base - h - 6:.1f}" text-anchor="middle" font-size="12" fill="#3D424A" font-weight="{700 if ult else 400}">{esc(fmt(v))}</text>')
+        out.append(f'<text x="{x + bw / 2:.1f}" y="{H - 8}" text-anchor="middle" font-size="12" fill="#5A6070">{esc(r)}</text>')
+    out.append("</svg>")
+    return '<div class="chart">' + "".join(out) + "</div>"
+
+
+def svg_dispersao(B, pts) -> str:
+    """pts: lista de (icao, passageiros, pontualidade). Eixo x em escala logarítmica."""
+    import math
+    W, H, ml, mr, mt, mb = 640, 400, 52, 16, 16, 44
+    xs = [math.log10(p[1]) for p in pts]
+    ys = [p[2] for p in pts]
+    x0, x1 = math.floor(min(xs) * 2) / 2, math.ceil(max(xs) * 2) / 2
+    y0, y1 = math.floor(min(ys) * 20) / 20, math.ceil(max(ys) * 20) / 20
+
+    def px(x): return ml + (x - x0) / (x1 - x0) * (W - ml - mr)
+    def py(y): return H - mb - (y - y0) / (y1 - y0) * (H - mt - mb)
+    out = [f'<svg class="disp" viewBox="0 0 {W} {H}" role="img" aria-label="Gráfico de dispersão: passageiros embarcados e pontualidade de cada aeroporto em {mes_nome(B.dem.ref)}">']
+    y = y0
+    while y <= y1 + 1e-9:
+        out.append(f'<line x1="{ml}" y1="{py(y):.1f}" x2="{W - mr}" y2="{py(y):.1f}" stroke="#EFEEF4"/>'
+                   f'<text x="{ml - 8}" y="{py(y) + 4:.1f}" text-anchor="end" font-size="12" fill="#5A6070">{pc(y, 0)}</text>')
+        y += 0.05
+    for e, rot in ((3, "1 mil"), (4, "10 mil"), (5, "100 mil"), (6, "1 milhão")):
+        if x0 <= e <= x1:
+            out.append(f'<line x1="{px(e):.1f}" y1="{mt}" x2="{px(e):.1f}" y2="{H - mb}" stroke="#EFEEF4"/>'
+                       f'<text x="{px(e):.1f}" y="{H - mb + 18}" text-anchor="middle" font-size="12" fill="#5A6070">{rot}</text>')
+    out.append(f'<text x="{(ml + W - mr) / 2:.0f}" y="{H - 6}" text-anchor="middle" font-size="12" fill="#3D424A">Passageiros embarcados no mês (escala logarítmica)</text>')
+    n = len(xs); mx, my = sum(xs) / n, sum(ys) / n
+    sxx = sum((x - mx) ** 2 for x in xs)
+    if sxx:
+        b = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx
+        a = my - b * mx
+        out.append(f'<line x1="{px(x0):.1f}" y1="{py(a + b * x0):.1f}" x2="{px(x1):.1f}" y2="{py(a + b * x1):.1f}" stroke="#5B3FC4" stroke-width="1.5" stroke-dasharray="5 4"/>')
+    rotulados = {p[0] for p in sorted(pts, key=lambda t: -t[1])[:8]} | {max(pts, key=lambda t: t[2])[0], min(pts, key=lambda t: t[2])[0]}
+    for o, pax, pp in pts:
+        cx, cy = px(math.log10(pax)), py(pp)
+        nome = f"{B.cod(o)} · {B.aero_nome(o)}: {nf(pax)} passageiros, {pc(pp)} no horário"
+        circ = f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="5" fill="#5B3FC4" fill-opacity=".72" stroke="#fff" stroke-width="1"><title>{esc(nome)}</title></circle>'
+        out.append(f'<a href="/aeroportos/{B.aero_slug(o)}/">{circ}</a>')
+        if o in rotulados:
+            out.append(f'<text class="rt" x="{cx + 7:.1f}" y="{cy + 4:.1f}" font-size="11" font-weight="600" fill="#14161A">{esc(B.cod(o))}</text>')
+    out.append(f'<text x="14" y="{(mt + H - mb) / 2:.0f}" font-size="12" fill="#3D424A" text-anchor="middle" transform="rotate(-90 14 {(mt + H - mb) / 2:.0f})">Chegaram no horário</text>')
+    out.append("</svg>")
+    return '<div class="mapa-box grande">' + "".join(out) + "</div>"
+
+
+def pg_demanda(B: Base, aero_pag, rota_pag) -> str:
+    D = B.dem
+    mes = mes_nome(D.ref)
+    T, T0 = D.mensal[D.ref], D.mensal.get(D.ant)
+    # evolução
+    rot = [mes_curto(m) for m in D.u13]
+    graf_pax = svg_barras_valor(rot, [D.mensal[m].pax for m in D.u13], lambda v: nf(v / 1e6, 1),
+                                aria="Passageiros pagos, em milhões, nos últimos 13 meses")
+    graf_oc = svg_barras(rot, [D.mensal[m].ocup for m in D.u13], aria="Ocupação dos voos nos últimos 13 meses")
+    # companhias
+    cs = sorted(((c, x) for c, x in D.cia[D.ref].items() if x.pax >= 20000), key=lambda t: -t[1].pax)
+    lin_c = "".join(f'<tr><td>{B.link_cia(c)}</td><td class="r num">{abrevia(x.pax)}</td><td class="r num">{pc(x.pax / T.pax)}</td>'
+                    f'<td style="min-width:180px">{meter(x.ocup)}</td><td class="r num">{abrevia(x.ass)}</td></tr>' for c, x in cs)
+    # aeroportos
+    ae = sorted(D.aero[D.ref].items(), key=lambda t: -t[1].pax)
+    ae = [(o, x) for o, x in ae if x.pax > 0][:15]
+    lin_a = "".join(
+        f'<tr><td class="wrap">{B.link_aero(o, esc(B.cod(o)))} <span class="small">{esc(B.aero_nome(o))}</span></td>'
+        f'<td class="r num">{abrevia(x.pax)}</td><td class="r num">{pc(x.ocup)}</td>'
+        f'<td class="r num">{pc(B.aero[B.ref][o].p_pont) if o in B.aero[B.ref] else "–"}</td></tr>' for o, x in ae)
+    # rotas
+    rs = [(r, x) for r, x in D.rota[D.ref].items() if x.pax >= MIN_PAX_ROTA_RANK and x.ocup]
+    top_pax = sorted(rs, key=lambda t: -t[1].pax)[:10]
+    cheias = sorted(rs, key=lambda t: -t[1].ocup)[:8]
+    vazias = sorted(rs, key=lambda t: t[1].ocup)[:8]
+
+    def lin_r(lst):
+        return "".join(f'<tr><td class="wrap">{B.link_rota(o, d, esc(B.cod(o)) + " → " + esc(B.cod(d)))} '
+                       f'<span class="small">{esc(B.cidade(o))} → {esc(B.cidade(d))}</span></td>'
+                       f'<td class="r num">{abrevia(x.pax)}</td><td class="r num"><b>{pc(x.ocup)}</b></td></tr>' for (o, d), x in lst)
+    cab_r = '<thead><tr><th scope="col">Rota</th><th scope="col" class="r">Passageiros</th><th scope="col" class="r">Ocupação</th></tr></thead>'
+    # pontualidade x volume: aeroportos
+    pts = []
+    for o, x in D.aero[D.ref].items():
+        a = B.aero[B.ref].get(o)
+        if a and a.prev >= 300 and a.med >= 100 and x.pax >= MIN_PAX_AERO_DISP and o in aero_pag:
+            pts.append((o, x.pax, a.p_pont))
+    import math
+    r_aero = pearson([math.log10(p[1]) for p in pts], [p[2] for p in pts]) if len(pts) >= 8 else None
+    pts_s = sorted(pts, key=lambda t: -t[1])
+    top10 = Acc(); resto = Acc()
+    for o, _, _ in pts_s[:10]:
+        top10.soma(B.aero[B.ref][o])
+    for o, _, _ in pts_s[10:]:
+        resto.soma(B.aero[B.ref][o])
+    # pontualidade x ocupação: rotas em quartis
+    rp = []
+    for (o, d), x in D.rota[D.ref].items():
+        a = B.rota[B.ref].get((o, d))
+        if a and a.prev >= MIN_ROTA_RANK and x.pax >= MIN_PAX_ROTA_RANK and x.ocup:
+            rp.append(((o, d), x.ocup, a))
+    r_rota = pearson([t[1] for t in rp], [t[2].p_pont for t in rp]) if len(rp) >= 20 else None
+    rp.sort(key=lambda t: t[1])
+    quartis = []
+    if len(rp) >= 20:
+        q = len(rp) // 4
+        for i, nome in enumerate(("25% das rotas mais vazias", "Segundo quarto", "Terceiro quarto", "25% das rotas mais cheias")):
+            grupo = rp[i * q:(i + 1) * q] if i < 3 else rp[3 * q:]
+            ac = Acc()
+            for _, _, a in grupo:
+                ac.soma(a)
+            oc = sum(t[1] for t in grupo) / len(grupo)
+            quartis.append((nome, oc, ac.p_pont, ac.p_canc))
+    lin_q = "".join(f'<tr><td>{n}</td><td class="r num">{pc(oc)}</td><td style="min-width:180px">{meter(pp)}</td><td class="r num">{pc(pcn)}</td></tr>'
+                    for n, oc, pp, pcn in quartis)
+    # texto interpretativo
+    if r_aero is not None:
+        sent = "mais passageiros, menor a pontualidade" if r_aero < 0 else "mais passageiros, maior a pontualidade"
+        interp_aero = (f"A relação entre passageiros e pontualidade é <strong>{forca(r_aero)}</strong> (coeficiente de correlação {nf(r_aero, 2)}): "
+                       f"em geral, {sent}. " if abs(r_aero) >= 0.2 else
+                       f"A relação entre passageiros e pontualidade é <strong>muito fraca</strong> (coeficiente de correlação {nf(r_aero, 2)}): o tamanho do aeroporto, sozinho, não explica os atrasos. ")
+        interp_aero += (f"Os 10 aeroportos com mais passageiros tiveram {pc(top10.p_pont)} de partidas no horário, contra {pc(resto.p_pont)} nos demais.")
+    else:
+        interp_aero = ""
+    nota_corr = "Correlação mostra associação, não causa: aeroportos grandes também têm mais voos em horários de pico, mais conexões e clima diferente."
+    if r_rota is not None:
+        sent_r = "mais cheia a rota, menor a pontualidade" if r_rota < 0 else "mais cheia a rota, maior a pontualidade"
+        interp_rota = (f"Entre as rotas, a relação entre ocupação e pontualidade é <strong>{forca(r_rota)}</strong> (coeficiente {nf(r_rota, 2)})"
+                       + (f": em geral, {sent_r}." if abs(r_rota) >= 0.2 else "."))
+    else:
+        interp_rota = ""
+    # FAQ
+    pares = [(f"Quantos passageiros voaram no Brasil em {mes}?",
+              f"Em {mes}, as companhias aéreas transportaram {nf(T.pax)} passageiros pagos em voos domésticos regulares, com ocupação de {pc(T.ocup)}."),
+             ("Qual a ocupação média dos voos no Brasil?",
+              f"Em {mes}, a ocupação (passageiros-quilômetros pagos sobre assentos-quilômetros oferecidos) foi de {pc(T.ocup)} nos voos domésticos regulares."),
+             ("Qual aeroporto do Brasil tem mais passageiros?",
+              f"Em {mes}, o aeroporto com mais passageiros embarcados em voos domésticos regulares foi {B.nome_cod(ae[0][0])}, com {nf(ae[0][1].pax)}." if ae else "")]
+    if interp_aero:
+        pares.append(("Aeroporto lotado atrasa mais?",
+                      re.sub(r"<[^>]+>", "", interp_aero) + " " + nota_corr))
+    pares = [p for p in pares if p[1]]
+    faq, ld = faq_html(pares)
+    disp = (f'<section class="card"><div class="card-head"><h2>Aeroporto lotado atrasa mais?</h2><span class="small">{len(pts)} aeroportos, {mes}</span></div>'
+            f'<p>{interp_aero}</p>{svg_dispersao(B, pts) if len(pts) >= 8 else ""}'
+            f'<p class="nota">Cada ponto é um aeroporto com ao menos {nf(MIN_PAX_AERO_DISP)} passageiros embarcados no mês. A linha tracejada é a tendência. {nota_corr}</p></section>') if interp_aero else ""
+    quart = (f'<section class="card"><div class="card-head"><h2>Voo cheio atrasa mais?</h2><span class="small">{len(rp)} rotas, {mes}</span></div>'
+             f'<p>{interp_rota}</p><div class="tw"><table><thead><tr><th scope="col">Grupo de rotas</th><th scope="col" class="r">Ocupação média</th>'
+             f'<th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th></tr></thead><tbody>{lin_q}</tbody></table></div>'
+             f'<p class="nota">Rotas com ao menos {nf(MIN_PAX_ROTA_RANK)} passageiros e {MIN_ROTA_RANK} voos no mês, divididas em quatro grupos pela ocupação. {nota_corr}</p></section>') if quartis else ""
+    corpo = f"""<section class="hero"><span class="kicker">Demanda · {mes}</span><h1>Passageiros e ocupação dos voos no Brasil</h1>
+<p class="lead">Em {mes}, as companhias aéreas transportaram <strong>{nf(T.pax)}</strong> passageiros em voos domésticos regulares, com <strong>{pc(T.ocup)}</strong> dos assentos ocupados.</p></section>
+{tiles_dem(T, T0)}
+<section class="card"><h2>Passageiros por mês</h2>{graf_pax}<p class="nota">Milhões de passageiros pagos, voos domésticos regulares.</p></section>
+<section class="card"><h2>Ocupação por mês</h2>{graf_oc}</section>
+<section class="card"><div class="card-head"><h2>Companhias em {mes}</h2><span class="small">Passageiros pagos e ocupação</span></div>
+<div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col" class="r">Passageiros</th><th scope="col" class="r">Participação</th><th scope="col">Ocupação</th><th scope="col" class="r">Assentos</th></tr></thead><tbody>{lin_c}</tbody></table></div></section>
+<section class="card"><div class="card-head"><h2>Aeroportos com mais passageiros</h2><span class="small">Embarques em {mes}</span></div>
+<div class="tw"><table><thead><tr><th scope="col">Aeroporto</th><th scope="col" class="r">Passageiros</th><th scope="col" class="r">Ocupação</th><th scope="col" class="r">No horário</th></tr></thead><tbody>{lin_a}</tbody></table></div></section>
+{disp}
+{quart}
+<section class="card"><div class="card-head"><h2>Rotas com mais passageiros</h2><span class="small">Em {mes}, nos dois sentidos separados</span></div>
+<div class="tw"><table>{cab_r}<tbody>{lin_r(top_pax)}</tbody></table></div></section>
+<div class="grid2">
+<section class="card"><div class="card-head"><h2>Rotas mais cheias</h2><span class="small">Mínimo de {nf(MIN_PAX_ROTA_RANK)} passageiros</span></div><div class="tw"><table>{cab_r}<tbody>{lin_r(cheias)}</tbody></table></div></section>
+<section class="card"><div class="card-head"><h2>Rotas mais vazias</h2><span class="small">Mínimo de {nf(MIN_PAX_ROTA_RANK)} passageiros</span></div><div class="tw"><table>{cab_r}<tbody>{lin_r(vazias)}</tbody></table></div></section>
+</div>
+<section class="card"><h2>Como lemos os números</h2><p>Os dados são da base Dados Estatísticos do Transporte Aéreo, da ANAC, informada pelas próprias empresas. Entram só voos domésticos regulares e passageiros pagos (os gratuitos ficam de fora). Ocupação é passageiros-quilômetros pagos (RPK) divididos por assentos-quilômetros oferecidos (ASK), a medida que o setor usa. A base chega com cerca de dois meses de atraso, e cada sentido de uma rota aparece separado.</p></section>
+{faq}"""
+    return pagina(B, "/demanda/", f"Passageiros e ocupação dos voos no Brasil: {mes} | Voo em Números",
+                  f"Em {mes}, {nf(T.pax)} passageiros voaram em voos domésticos regulares, com {pc(T.ocup)} de ocupação. Companhias, aeroportos, rotas e a relação com atrasos.",
+                  corpo, "/demanda/", migalhas=[("", "Passageiros e ocupação")], jsonld=[ld])
+
+
 def pg_404(B: Base) -> str:
     corpo = ('<section class="hero"><h1>Página não encontrada</h1><p class="lead">Este endereço não existe ou o voo deixou de operar. '
              'Use a busca para achar um voo, uma rota ou um aeroporto.</p>'
@@ -1339,6 +1653,7 @@ def escreve(caminho: str, conteudo: str):
 
 def main() -> int:
     B = Base(carrega())
+    B.dem = Demanda(DEM_ARQ) if DEM_ARQ.exists() else None
     if SAIDA.exists():
         shutil.rmtree(SAIDA)
     SAIDA.mkdir(parents=True)
@@ -1397,12 +1712,16 @@ def main() -> int:
         pub("/fim-de-ano/", pg_fim(B, fim, aero_pag), "0.9")
     pub("/direitos/", pg_direitos(B), "0.9")
     pub("/mapa/", pg_mapa(B, aero_pag), "0.8")
+    if B.dem:
+        pub("/demanda/", pg_demanda(B, aero_pag, rota_pag), "0.8")
     pub("/sobre/", pg_sobre(B), "0.3")
     escreve("/404.html", pg_404(B))
 
     # busca
     idx = [["Seus direitos: voo atrasado ou cancelado, overbooking, bagagem", "guia", "/direitos/"],
            ["Mapa da pontualidade dos aeroportos do Brasil por estado", "mapa", "/mapa/"]]
+    if B.dem:
+        idx.append(["Passageiros e ocupação dos voos: aeroporto lotado atrasa mais", "demanda", "/demanda/"])
     for c in cias_pag:
         idx.append([B.cia_nome(c), "companhia", f"/companhias/{B.cia_slug(c)}/"])
     for a in sorted(aero_pag, key=lambda a: -B.soma(B.aero, a, B.u3).prev):
