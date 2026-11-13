@@ -2,10 +2,28 @@
 import csv, io, requests
 from collections import Counter, defaultdict
 U = "https://sistemas.anac.gov.br/dadosabertos/Voos%20e%20opera%C3%A7%C3%B5es%20a%C3%A9reas/Dados%20Estat%C3%ADsticos%20do%20Transporte%20A%C3%A9reo/Dados_Estatisticos.csv"
-r = requests.get(U, timeout=600, stream=True)
-linhas = (l.decode("utf-8-sig", "replace") for l in r.iter_lines())
-next(linhas)  # "Atualizado em"
-rd = csv.DictReader(linhas, delimiter=";")
+import os, time
+ARQ = "/tmp/de.csv"
+total = int(requests.head(U, timeout=60, allow_redirects=True).headers.get("content-length", 0))
+print("tamanho esperado", total)
+tent = 0
+while (os.path.getsize(ARQ) if os.path.exists(ARQ) else 0) < total and tent < 40:
+    tent += 1
+    ja = os.path.getsize(ARQ) if os.path.exists(ARQ) else 0
+    try:
+        rr = requests.get(U, headers={"Range": f"bytes={ja}-"}, timeout=120, stream=True)
+        if rr.status_code not in (200, 206):
+            print("status", rr.status_code); time.sleep(5); continue
+        modo = "ab" if rr.status_code == 206 else "wb"
+        with open(ARQ, modo) as f:
+            for ch in rr.iter_content(1 << 20):
+                f.write(ch)
+    except Exception as e:
+        print("tentativa", tent, "falhou:", str(e)[:120]); time.sleep(3)
+print("baixado", os.path.getsize(ARQ), "em", tent, "tentativas")
+fh = open(ARQ, encoding="utf-8-sig", errors="replace")
+fh.readline()  # "Atualizado em"
+rd = csv.DictReader(fh, delimiter=";")
 print("COLUNAS:", rd.fieldnames)
 nat, grp, meses, tot = Counter(), Counter(), defaultdict(lambda: Counter()), 0
 amostra = []
