@@ -1,27 +1,19 @@
-import re, requests
-import time
+import re, time, requests
 H = {"User-Agent": "Mozilla/5.0 (compatible; vooemnumeros-sonda)"}
 def get(u):
-    for i in range(4):
+    for i in range(5):
         try: return requests.get(u, headers=H, timeout=60)
         except Exception as e:
-            print("retry", i, str(e)[:80]); time.sleep(4)
-    return None
+            print("retry", i, str(e)[:80]); time.sleep(5)
 def txt(t): return re.sub(r"\s+", " ", re.sub(r"<script.*?</script>|<style.*?</style>|<[^>]+>", " ", t, flags=re.S))
-for u in ["https://www.gov.br/anac/pt-br/assuntos/passageiros/desempenho-das-empresas",
-          "https://www.gov.br/anac/pt-br/noticias/2026/nova-plataforma-da-anac-supera-4-mil-reclamacoes-finalizadas-nos-primeiros-60-dias"]:
-    r = get(u)
-    if r is None: print("\n## FALHOU", u); continue
-    t = r.text
-    print("\n##", r.status_code, u, len(t))
-    i = t.find("<main"); body = t[i:] if i > 0 else t
-    print("TEXTO:", txt(body)[:2500])
-    for l in sorted(set(re.findall(r'(?:href|src)="([^"]+)"', t))):
-        if re.search(r"(powerbi|looker|datastudio|\.csv|\.xlsx|\.zip|\.json|painel|iframe|api|dados-abertos|boletim|desempenho)", l, re.I) and "share" not in l:
-            print("  LINK", l[:220])
-    for m in re.findall(r"<iframe[^>]+>", t)[:5]: print("  IFRAME", m[:300])
-r = get("https://www.consumidor.gov.br/pages/dadosabertos/externo/"); t = r.text if r else ""
-print("\n## consumidor dados abertos")
-for m in re.finditer(r"publicacoesDT|ajax|\.csv|\.zip|Download|download", t):
-    print("  ", t[max(0, m.start()-120):m.end()+200].replace("\n", " ")[:330]); 
-    if m.start() > 15000: break
+u = "https://www.gov.br/anac/pt-br/assuntos/passageiros/anac_passageiro/desempenho-das-empresas"
+r = get(u)
+if r is None: raise SystemExit("falhou")
+t = r.text
+print("##", r.status_code, u, len(t))
+i = t.find('id="content"'); 
+print("TEXTO:", txt(t[i:] if i > 0 else t)[:2200])
+for m in re.findall(r"<iframe[^>]+>", t)[:5]: print("IFRAME", m[:400])
+for l in sorted(set(re.findall(r'(?:href|src|data-[a-z-]+)="([^"]+)"', t))):
+    if re.search(r"(powerbi|looker|datastudio|\.csv|\.xlsx|\.zip|\.json|painel|bi\.|qlik|tableau|api|dados)", l, re.I) and "share" not in l:
+        print("LINK", l[:260])
