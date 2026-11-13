@@ -531,6 +531,7 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
 <div class="busca" role="search"><label for="busca" class="sr">Buscar voo, rota, aeroporto ou companhia</label>
 <input id="busca" type="search" autocomplete="off" placeholder="Voo (LA 3300), rota (GRU SSA), cidade ou aeroporto"><div id="busca-res" aria-live="polite"></div></div>
 </section>
+{fim_card(B, fim)}
 {tiles_acc(T, T0)}
 {mapa_card_home(B, aero_pag)}
 {dem_card_home(B)}
@@ -548,7 +549,6 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
 <section class="card"><div class="card-head"><h2>Voos que mais atrasaram</h2><span class="small">Voos com pelo menos {MIN_VOO_RANK} viagens em {mes}</span></div>
 <div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Trecho</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Atraso médio dos atrasados</th></tr></thead><tbody>{piores_voos}</tbody></table></div></section>
 {direitos_card_home()}
-{fim_card(fim)}
 """
     desc = (f"{cap(mes)}: {pc(T.p_pont)} dos voos domésticos chegaram no horário e {pc(T.p_canc)} foram cancelados. "
             "Ranking de companhias, aeroportos, rotas e voos com dados oficiais da ANAC.")
@@ -557,11 +557,30 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
     return pagina(B, "/", f"Pontualidade dos voos no Brasil: {mes} | Voo em Números", desc, corpo, "/", jsonld=[site_ld])
 
 
-def fim_card(fim) -> str:
+def fim_card(B: Base, fim) -> str:
+    """Faixa de destaque do fim de ano, logo abaixo do topo da página inicial."""
     if not fim:
         return ""
-    return (f'<section class="card dark"><h2>Vai viajar no fim do ano?</h2><p>Veja como foram a pontualidade e os cancelamentos, '
-            f'dia a dia, no Natal e Ano-Novo de {fim["ano"]}, por companhia e por aeroporto.</p>'
+    D = {}
+    for m in fim["meses"]:
+        for k, v in B.meses[m]["dias"].items():
+            D[k] = [x + y for x, y in zip(D.get(k, [0, 0, 0, 0]), v)]
+    S = [0, 0, 0, 0]
+    piores = []
+    for d in fim["dias"]:
+        v = D.get(d.isoformat())
+        if v:
+            S = [x + y for x, y in zip(S, v)]
+            if v[2]:
+                piores.append((v[3] / v[2], d))
+    ano = fim["ano"]
+    resumo = ""
+    if S[2] and S[0]:
+        pior = min(piores)
+        resumo = (f' Entre 19/12/{ano} e 04/01/{ano + 1}, <strong>{pc(S[3] / S[2])}</strong> dos voos chegaram no horário e '
+                  f'<strong>{pc(S[1] / S[0])}</strong> foram cancelados. O pior dia foi {pior[1].day} de {MESES[pior[1].month - 1]} ({pc(pior[0])} no horário).')
+    return (f'<section class="card dark destaque"><span class="kicker">Em destaque</span><h2>Vai viajar no fim do ano?</h2>'
+            f'<p>Veja como foram os atrasos e cancelamentos no Natal e Ano-Novo de {ano}, dia a dia, por companhia e por aeroporto.{resumo}</p>'
             f'<div class="btns"><a class="btn" href="/fim-de-ano/" style="background:#F2B33D;color:#14161A">Ver o fim de ano</a></div></section>')
 
 
