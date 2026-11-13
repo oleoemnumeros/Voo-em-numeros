@@ -54,6 +54,13 @@ jobs:
           FORCAR: ${{ (github.event_name == 'workflow_dispatch' && inputs.forcar) && '1' || '0' }}
         run: python scripts/atualizar.py
 
+      - name: Baixar demanda da ANAC (passageiros e ocupação)
+        id: demanda
+        continue-on-error: true
+        env:
+          FORCAR: ${{ (github.event_name == 'workflow_dispatch' && inputs.forcar) && '1' || '0' }}
+        run: python scripts/atualizar_demanda.py
+
       - name: Gerar site
         if: always()
         run: python scripts/gerar_site.py
