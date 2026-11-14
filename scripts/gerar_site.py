@@ -341,6 +341,10 @@ LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rec
 def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo: str = "",
            migalhas=None, jsonld=None) -> str:
     url = BASE + caminho
+    # o Google corta títulos acima de ~60 caracteres: tira a marca da <title> quando passa disso
+    titulo_tag = titulo[:-len(" | Voo em Números")] if len(titulo) > 62 and titulo.endswith(" | Voo em Números") else titulo
+    if len(titulo_tag) > 62:
+        titulo_tag = titulo_tag.replace("atrasos e cancelamentos", "atrasos")
     nav = "".join(f'<a href="{h}"' + (' aria-current="page"' if h == ativo else "") + f">{t}</a>" for h, t in NAV)
     bc = ""
     lds = list(jsonld or [])
@@ -358,7 +362,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{esc(titulo)}</title>
+<title>{esc(titulo_tag)}</title>
 <meta name="description" content="{esc(descricao)}">
 <link rel="canonical" href="{url}">
 <meta property="og:type" content="website">
@@ -834,6 +838,18 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
                       f"{pc(pior_p[1].p_pont)} na {pior_p[0].split(' (')[0].lower()}, nos últimos 3 meses."))
     faq, ld = faq_html(pares)
     volta = (d, o) in rota_pag
+    def _vol(k):
+        x = B.soma(B.rota, k, B.u3)
+        return x.prev if x else 0
+    def _links(ks, rotulo):
+        return "".join(f'<a class="btn sec" href="/rotas/{B.rota_slug(*k)}/">{esc(B.cod(k[0]))} → {esc(B.cod(k[1]))}{rotulo(k)}</a>' for k in ks)
+    outras_o = sorted((k for k in rota_pag if k[0] == o and k != (o, d)), key=lambda k: -_vol(k))[:8]
+    outras_d = sorted((k for k in rota_pag if k[1] == d and k != (o, d) and k != (d, o)), key=lambda k: -_vol(k))[:8]
+    rel_html = ""
+    if outras_o:
+        rel_html += f'<section class="card"><h2>Outras rotas saindo de {esc(B.cidade(o))} ({esc(co)})</h2><div class="btns">{_links(outras_o, lambda k: " · " + esc(B.cidade(k[1])))}</div></section>'
+    if outras_d:
+        rel_html += f'<section class="card"><h2>Outras rotas chegando a {esc(B.cidade(d))} ({esc(cd)})</h2><div class="btns">{_links(outras_d, lambda k: " · " + esc(B.cidade(k[0])))}</div></section>'
     corpo = f"""<section class="hero"><span class="kicker">Rota · voos diretos</span><h1>{esc(B.nome_cod(o))} → {esc(B.nome_cod(d))}</h1>
 <p class="lead">Em {base_txt}, <strong>{pc(a.p_pont)}</strong> dos voos chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados. {dur}</p>
 <div class="btns">{f'<a class="btn sec" href="/rotas/{B.rota_slug(d, o)}/">Ver a volta: {esc(cd)} → {esc(co)}</a>' if volta else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(o)}/">Aeroporto {esc(co)}</a>' if o in B.pag_aero else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(d)}/">Aeroporto {esc(cd)}</a>' if d in B.pag_aero else ""}</div></section>
@@ -847,6 +863,7 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
 <section class="card"><h2>Por dia da semana</h2>{sem_html}</section>
 </div>
 <section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de voos {co}-{cd} no horário nos últimos 13 meses")}</section>
+{rel_html}
 {aviso_direitos()}
 {faq}"""
     return pagina(B, f"/rotas/{B.rota_slug(o, d)}/", f"Voos {B.cidade(o)} ({co}) → {B.cidade(d)} ({cd}): atrasos e cancelamentos | Voo em Números",
