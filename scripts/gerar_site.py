@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt
 import html
 import json
+import os
 import re
 import shutil
 import sys
@@ -332,6 +333,121 @@ def familia_html() -> str:
             f'<ul>{"".join(itens)}</ul></div>')
 
 
+# ---------------------------------------------------------------- Continue explorando (entre os portais)
+# Para incluir um novo portal, acrescente uma linha aqui e em FAMILIA.
+PORTAIS = {
+    "oleo": ("Óleo em Números", "https://oleoemnumeros.com.br", "#F59E0B"),
+    "comex": ("Comex em Números", "https://comexemnumeros.com.br", "#37C0A5"),
+    "voo": ("Voo em Números", BASE, "#A58BF0"),
+    "economia": ("Economia em Números", "https://economiaemnumeros.com.br", "#7EA3FF"),
+}
+ESTE = "voo"
+
+
+def continue_html(itens) -> str:
+    """Cartões no fim da página: (portal, caminho, título, descrição); no máximo 4.
+    Cada clique é contado no GoatCounter como evento continue/<origem>-<destino>."""
+    cartoes = []
+    vistos = set()
+    for portal, caminho, titulo, desc in itens:
+        nome, base, cor = PORTAIS[portal]
+        href = caminho if portal == ESTE else base + caminho
+        if href in vistos:
+            continue
+        vistos.add(href)
+        cartoes.append(
+            f'<li><a href="{esc(href)}" data-goatcounter-click="continue/{ESTE}-{portal}" data-goatcounter-title="Continue explorando: {esc(titulo)}">'
+            f'<span class="cont-tag"><i style="background:{cor}"></i>{nome}</span><b>{esc(titulo)}</b><span class="cont-d">{esc(desc)}</span></a></li>')
+        if len(cartoes) == 4:
+            break
+    if not cartoes:
+        return ""
+    return ('<section class="continue" aria-labelledby="continue-t"><h2 id="continue-t">Continue explorando</h2>'
+            f'<ul class="cont-grid">{"".join(cartoes)}</ul></section>')
+
+
+# índices de cidades dos outros portais: {chave_cidade: [(portal, caminho, rótulo)]}; guarda cópia em data/familia/
+# para o caso de o outro site estar fora do ar na hora da geração
+FAMILIA_INDICES = {
+    "economia": ("https://economiaemnumeros.com.br/municipios/busca.json", "economia", "Quantos habitantes, quanto a cidade produz e de onde vem o dinheiro da prefeitura"),
+    "comex": ("https://comexemnumeros.com.br/municipios/indice.json", "comex", "O que a cidade exporta e importa"),
+    "oleo": ("https://oleoemnumeros.com.br/royalties/indice.json", "oleo", "Royalties de petróleo que a cidade recebe"),
+}
+
+
+def chave_cidade(nome: str, uf: str) -> str:
+    t = unicodedata.normalize("NFKD", str(nome)).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "", t) + "-" + str(uf).strip().upper()
+
+
+def carrega_familia(rede: bool = True) -> dict:
+    import urllib.request
+    pasta = RAIZ / "data" / "familia"
+    out: dict = {}
+    for nome, (url, portal, desc) in FAMILIA_INDICES.items():
+        cache = pasta / f"{nome}.json"
+        itens = None
+        try:
+            if not rede:
+                raise OSError("sem rede")
+            req = urllib.request.Request(url, headers={"User-Agent": "vooemnumeros"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                itens = json.loads(r.read().decode("utf-8"))
+            pasta.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps(itens, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        except Exception:  # noqa: BLE001
+            if cache.exists():
+                try:
+                    itens = json.loads(cache.read_text(encoding="utf-8"))
+                except Exception:  # noqa: BLE001
+                    itens = None
+        for it in itens or []:
+            try:
+                cid, uf, caminho = it[0], it[1], it[2]
+            except (IndexError, TypeError, KeyError):
+                continue
+            if str(caminho).startswith("http"):
+                continue
+            out.setdefault(chave_cidade(cid, uf), {})[nome] = (portal, str(caminho), desc)
+    return out
+
+
+def itens_cidade(B: Base, icao: str) -> list:
+    """Cartões das páginas da cidade do aeroporto nos outros portais."""
+    achados = B.familia.get(chave_cidade(B.cidade(icao), B.uf(icao)), {})
+    cid = B.cidade(icao)
+    titulos = {"economia": f"{cid}: população, PIB e prefeitura", "comex": f"O que {cid} exporta e importa",
+               "oleo": f"Royalties de petróleo em {cid}"}
+    return [(p, c, titulos[n], d) for n in ("economia", "comex", "oleo") if n in achados for (p, c, d) in [achados[n]]]
+
+
+def continue_padrao(caminho: str) -> list:
+    """Cartões por tipo de página, para as que não passam os seus."""
+    direitos = ("voo", "/direitos/", "Seus direitos se o voo atrasar", "O que a companhia deve pagar ou oferecer, por tempo de atraso")
+    fim = ("voo", "/fim-de-ano/", "Voar no fim de ano", "Quais aeroportos e dias têm mais atraso no Natal e no Ano-Novo")
+    mapa = ("voo", "/mapa/", "Mapa da pontualidade", "Cada aeroporto do Brasil por cor, do mais ao menos pontual")
+    aero = ("voo", "/aeroportos/", "Ranking dos aeroportos", "Do mais ao menos pontual do Brasil")
+    dem = ("voo", "/demanda/", "Passageiros e ocupação", "Aeroporto lotado atrasa mais?")
+    aviao = ("comex", "/produto/8802/", "O Brasil também exporta aviões", "Quanto o país vende e compra de aviões e helicópteros")
+    qav = ("oleo", "/refino/", "Do petróleo ao querosene de aviação", "Quanto as refinarias produzem de cada derivado")
+    eco = ("economia", "/", "Selic, inflação e dólar", "Os números da economia brasileira, atualizados todo dia")
+    if caminho == "/":
+        return [direitos, aviao, qav, mapa]
+    if caminho.startswith(("/companhias/", "/voos/")):
+        return [aero, direitos, dem, eco]
+    if caminho.startswith("/rotas/"):
+        return [direitos, aero, mapa, eco]
+    if caminho.startswith("/aeroportos/"):
+        return [("voo", "/rotas/", "Rotas mais e menos pontuais", "Qual trecho atrasa mais"), direitos, mapa, eco]
+    if caminho.startswith("/fim-de-ano/"):
+        return [direitos, mapa, aero, eco]
+    if caminho.startswith("/direitos/"):
+        return [aero, mapa, fim, aviao]
+    if caminho.startswith(("/mapa/", "/demanda/")):
+        return [aero, direitos, aviao, eco]
+    return []
+
+
 NAV = [("/", "Início"), ("/companhias/", "Companhias"), ("/aeroportos/", "Aeroportos"), ("/rotas/", "Rotas"), ("/mapa/", "Mapa"), ("/demanda/", "Passageiros"),
        ("/fim-de-ano/", "Fim de ano"), ("/direitos/", "Seus direitos"), ("/sobre/", "Como funciona")]
 LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#5B3FC4"/>'
@@ -339,8 +455,13 @@ LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rec
 
 
 def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo: str = "",
-           migalhas=None, jsonld=None) -> str:
+           migalhas=None, jsonld=None, continuar=None) -> str:
     url = BASE + caminho
+    # "Continue explorando": cartões da própria página (continuar) completados pelos do tipo de página;
+    # links para páginas do próprio site só entram se a página existe (B.fixas)
+    cont = [c for c in list(continuar or []) + continue_padrao(caminho) if c[0] != ESTE or c[1] in B.fixas or c[1].startswith(("/aeroportos/", "/rotas/", "/voos/", "/companhias/"))]
+    cont = [c for c in cont if c[1] != caminho]
+    cont_html = continue_html(cont)
     # o Google corta títulos acima de ~60 caracteres: tira a marca da <title> quando passa disso
     titulo_tag = titulo[:-len(" | Voo em Números")] if len(titulo) > 62 and titulo.endswith(" | Voo em Números") else titulo
     if len(titulo_tag) > 62:
@@ -394,6 +515,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <main>
 {bc}
 {corpo}
+{cont_html}
 </main>
 <footer><div>
 <span><strong>Voo em Números</strong> · versão beta</span>
@@ -741,7 +863,8 @@ def pg_aero(B: Base, o: str, rota_pag, voo_pag) -> str:
 {faq}"""
     return pagina(B, f"/aeroportos/{B.aero_slug(o)}/", f"Aeroporto {B.nome_cod(o)}: atrasos e cancelamentos | Voo em Números",
                   f"{cap(base_txt)}: {pc(a.p_pont)} das partidas de {cod} chegaram no horário e {pc(a.p_canc)} foram canceladas. Companhias, destinos e voos que mais atrasam.",
-                  corpo, "/aeroportos/", migalhas=[("/aeroportos/", "Aeroportos"), ("", B.nome_cod(o))], jsonld=[ld])
+                  corpo, "/aeroportos/", migalhas=[("/aeroportos/", "Aeroportos"), ("", B.nome_cod(o))], jsonld=[ld],
+                  continuar=itens_cidade(B, o))
 
 
 def pg_rotas(B: Base, rota_pag) -> str:
@@ -868,7 +991,8 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
 {faq}"""
     return pagina(B, f"/rotas/{B.rota_slug(o, d)}/", f"Voos {B.cidade(o)} ({co}) → {B.cidade(d)} ({cd}): atrasos e cancelamentos | Voo em Números",
                   f"{cap(base_txt)}: {pc(a.p_pont)} dos voos {co}–{cd} chegaram no horário e {pc(a.p_canc)} foram cancelados. Veja o voo e a companhia mais pontuais.",
-                  corpo, "/rotas/", migalhas=[("/rotas/", "Rotas"), ("", f"{co} → {cd}")], jsonld=[ld])
+                  corpo, "/rotas/", migalhas=[("/rotas/", "Rotas"), ("", f"{co} → {cd}")], jsonld=[ld],
+                  continuar=itens_cidade(B, d)[:2] + itens_cidade(B, o)[:1])
 
 
 def botao_ao_vivo(c: str, n: str) -> str:
@@ -1750,6 +1874,7 @@ def escreve(caminho: str, conteudo: str):
 def main() -> int:
     B = Base(carrega())
     B.dem = Demanda(DEM_ARQ) if DEM_ARQ.exists() else None
+    B.familia = carrega_familia(rede=os.environ.get("VOO_SEM_REDE") != "1")
     if SAIDA.exists():
         shutil.rmtree(SAIDA)
     SAIDA.mkdir(parents=True)
@@ -1785,6 +1910,12 @@ def main() -> int:
     cias_pag = cias_pag_pre(B)
     cias_pag.sort(key=lambda c: -B.soma(B.cia, c, B.u12).prev)
     fim = periodo_fim(B)
+    # páginas fixas que existem (o bloco "Continue explorando" só liga a páginas existentes)
+    B.fixas = {"/", "/companhias/", "/aeroportos/", "/rotas/", "/direitos/", "/mapa/"}
+    if fim:
+        B.fixas.add("/fim-de-ano/")
+    if B.dem:
+        B.fixas.add("/demanda/")
 
     urls = []
 
@@ -1828,6 +1959,12 @@ def main() -> int:
     for k in sorted(voo_pag, key=lambda k: -sum(x.prev for x in B.voo_legs[k].values())):
         idx.append([f"{B.cod_voo(*k)} {voo_pag[k]}", B.cia_nome(k[0]), f"/voos/{B.voo_slug(*k)}/"])
     (SAIDA / "busca.json").write_text(json.dumps(idx, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    # índice de cidades com aeroporto, lido pelos outros portais da família para ligar cidade → aeroporto
+    por_cidade = {}
+    for a in sorted(aero_pag, key=lambda a: -B.soma(B.aero, a, B.u3).prev):
+        por_cidade.setdefault(chave_cidade(B.cidade(a), B.uf(a)), [B.cidade(a), B.uf(a), f"/aeroportos/{B.aero_slug(a)}/"])
+    (SAIDA / "aeroportos" / "indice.json").write_text(
+        json.dumps(sorted(por_cidade.values()), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     # arquivos fixos
     shutil.copy(SITE / "estilo.css", SAIDA / "assets" / "estilo.css")
