@@ -11,6 +11,7 @@
   function textoCelula(c) {
     var k = c.cloneNode(true);
     Array.prototype.forEach.call(k.querySelectorAll(".s, .sr, .meta, [data-csv-ignorar]"), function (e) { e.parentNode.removeChild(e); });
+    Array.prototype.forEach.call(k.querySelectorAll("*"), function (e) { e.insertAdjacentText("afterend", " "); });   // evita "TomateAlimentação": separa blocos vizinhos
     return limpo(k.textContent).replace(/▲\s*/g, "+").replace(/▼\s*/g, "-");   // setas de variação viram sinal
   }
   function celulaCsv(v) { return /[;"\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
