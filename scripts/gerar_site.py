@@ -449,7 +449,7 @@ def continue_padrao(caminho: str) -> list:
 
 
 NAV = [("/", "Início"), ("/companhias/", "Companhias"), ("/aeroportos/", "Aeroportos"), ("/rotas/", "Rotas"), ("/mapa/", "Mapa"), ("/demanda/", "Passageiros"),
-       ("/fim-de-ano/", "Fim de ano"), ("/direitos/", "Seus direitos"), ("/sobre/", "Como funciona")]
+       ("/resumo/", "Resumos"), ("/fim-de-ano/", "Fim de ano"), ("/direitos/", "Seus direitos"), ("/sobre/", "Como funciona")]
 LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>')
 
@@ -520,7 +520,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <footer><div>
 <span><strong>Voo em Números</strong> · versão beta</span>
 <span>Voos domésticos regulares de passageiros. No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Cancelados contam sobre os voos previstos.</span>
-<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a></span>
+<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/resumo/">Resumos</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a></span>
 </div>{familia_html()}</footer>
 <script src="/assets/app.js?v={v}" defer></script>
 <script src="/assets/familia.js?v={v}" defer></script>
@@ -660,6 +660,7 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
 <input id="busca" type="search" autocomplete="off" placeholder="Voo (LA 3300), rota (GRU SSA), cidade ou aeroporto"><div id="busca-res" aria-live="polite"></div></div>
 </section>
 {fim_card(B, fim)}
+{resumo_card_home(B)}
 {tiles_acc(T, T0)}
 {mapa_card_home(B, aero_pag)}
 {dem_card_home(B)}
@@ -1861,6 +1862,145 @@ def gerar_imagens(B: Base):
     icone(64).save(SAIDA / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48), (64, 64)])
 
 
+
+# ---------------------------------------------------------------- resumo do mês
+# Todo mês, quando a ANAC publica os dados, sai um resumo com manchete, o que mudou e o ranking.
+# Como o site guarda todos os meses, os resumos dos meses antigos são refeitos a partir dos mesmos dados.
+def mes_anterior(m: str) -> str:
+    a, mm = int(m[:4]), int(m[5:]) - 1
+    return f"{a - 1}-12" if mm == 0 else f"{a}-{mm:02d}"
+
+
+def nome_mes(m: str) -> str:
+    return MESES[int(m[5:]) - 1]
+
+
+def resumo_dados(B: Base, m: str) -> dict:
+    T = B.tot[m]
+    ant = mes_anterior(m)
+    janela = [x for x in B.lista if x <= m][-12:]
+    return {
+        "m": m, "ant": ant, "T": T, "T1": B.tot.get(ant), "T12": B.tot.get(mes_ant_ano(m)), "janela": janela,
+        "pontos": [B.tot[x].p_pont for x in janela if B.tot[x].p_pont is not None],
+        "cias": sorted(((c, a) for c, a in B.cia[m].items() if a.prev >= MIN_CIA_RANK and a.p_pont is not None), key=lambda t: -t[1].p_pont),
+        "aeros": sorted(((o, a) for o, a in B.aero[m].items() if a.prev >= MIN_AERO_RANK and a.p_pont is not None), key=lambda t: -t[1].p_pont),
+        "rotas": sorted(((r, a) for r, a in B.rota[m].items() if a.prev >= MIN_ROTA_RANK and a.p_pont is not None), key=lambda t: t[1].p_pont),
+    }
+
+
+def resumo_manchete(d: dict) -> str:
+    m, T, T1 = d["m"], d["T"], d["T1"]
+    mes, pont, pts = nome_mes(m), pc(T.p_pont), d["pontos"]
+    if len(pts) >= 12 and T.p_pont == max(pts):
+        return f"Melhor pontualidade em 12 meses: {pont} dos voos chegaram no horário em {mes}"
+    if len(pts) >= 12 and T.p_pont == min(pts):
+        return f"Pior pontualidade em 12 meses: só {pont} dos voos chegaram no horário em {mes}"
+    if T1 and T1.p_pont is not None:
+        dif = 100 * (T.p_pont - T1.p_pont)
+        if abs(dif) >= 0.1:
+            return f"{pont} dos voos chegaram no horário em {mes}, {'alta' if dif > 0 else 'queda'} de {nf(abs(dif), 1)} p.p. sobre {nome_mes(d['ant'])}"
+    return f"{pont} dos voos chegaram no horário em {mes}"
+
+
+def resumo_destaques(B: Base, d: dict) -> list:
+    T, T1, out = d["T"], d["T1"], []
+    cs, ae, ro = d["cias"], d["aeros"], d["rotas"]
+    if len(cs) >= 2:
+        (c1, a1), (c2, a2) = cs[0], cs[-1]
+        out.append(f"<b>Companhia mais pontual:</b> {B.link_cia(c1)}, com {pc(a1.p_pont)} dos voos no horário. "
+                   f"A menos pontual foi {B.link_cia(c2)}, com {pc(a2.p_pont)}.")
+    if len(ae) >= 2:
+        (o1, a1), (o2, a2) = ae[0], ae[-1]
+        out.append(f"<b>Aeroporto mais pontual:</b> {B.link_aero(o1, esc(B.cod(o1)))} ({esc(B.cidade(o1))}), {pc(a1.p_pont)} das partidas no horário. "
+                   f"O menos pontual foi {B.link_aero(o2, esc(B.cod(o2)))} ({esc(B.cidade(o2))}), com {pc(a2.p_pont)}.")
+    if ro:
+        (o, dd), a = ro[0]
+        out.append(f"<b>Rota que mais atrasou:</b> {B.link_rota(o, dd, esc(B.cod(o)) + ' → ' + esc(B.cod(dd)))} "
+                   f"({esc(B.cidade(o))} → {esc(B.cidade(dd))}), com só {pc(a.p_pont)} dos voos no horário.")
+    canc = f"<b>Cancelamentos:</b> {pc(T.p_canc)} dos voos previstos ({nf(T.canc)} voos)"
+    if T1 and T1.p_canc is not None:
+        dif = 100 * (T.p_canc - T1.p_canc)
+        canc += f", {'mais' if dif > 0 else 'menos'} {nf(abs(dif), 1)} p.p. que em {nome_mes(d['ant'])}" if abs(dif) >= 0.05 else f", igual a {nome_mes(d['ant'])}"
+    out.append(canc + ".")
+    if T.media_atr is not None:
+        out.append(f"<b>Atraso médio:</b> {min_txt(T.media_atr)} entre os voos que passaram de 30 minutos.")
+    return out
+
+
+def resumo_post(B: Base, d: dict, manchete: str) -> str:
+    m, T, cs, ae = d["m"], d["T"], d["cias"], d["aeros"]
+    l = [f"Pontualidade dos voos no Brasil, {mes_nome(m)}", "", manchete + ".", "",
+         f"No horário: {pc(T.p_pont)} · Cancelados: {pc(T.p_canc)} · Atraso médio: {min_txt(T.media_atr)}"]
+    if len(cs) >= 2:
+        l.append(f"Companhia mais pontual: {B.cia_nome(cs[0][0])} ({pc(cs[0][1].p_pont)}). Menos pontual: {B.cia_nome(cs[-1][0])} ({pc(cs[-1][1].p_pont)}).")
+    if len(ae) >= 2:
+        l.append(f"Aeroporto mais pontual: {B.cod(ae[0][0])} ({pc(ae[0][1].p_pont)}). Menos pontual: {B.cod(ae[-1][0])} ({pc(ae[-1][1].p_pont)}).")
+    l += ["", "Ranking completo de companhias, aeroportos e rotas:", f"{BASE}/resumo/{m}/", "", "#aviacao #voos #pontualidade #ANAC"]
+    return "\n".join(l)
+
+
+def pg_resumo(B: Base, m: str) -> str:
+    d = resumo_dados(B, m)
+    T, T12, mes = d["T"], d["T12"], mes_nome(m)
+    manchete = resumo_manchete(d)
+    post = resumo_post(B, d, manchete)
+    lead = (f"Em {mes}, <strong>{pc(T.p_pont)}</strong> dos voos domésticos chegaram no horário e <strong>{pc(T.p_canc)}</strong> foram cancelados. "
+            f"Foram {nf(T.prev)} voos previstos.")
+    linhas = "".join(
+        f'<tr><td><a href="/companhias/{B.cia_slug(c)}/">{esc(B.cia_nome(c))}</a></td><td style="min-width:200px">{meter(a.p_pont)}</td>'
+        f'<td class="r num">{pc(a.p_canc)}</td><td class="r num">{min_txt(a.media_atr)}</td><td class="r num">{nf(a.prev)}</td></tr>'
+        if c in B.pag_cias else
+        f'<tr><td>{esc(B.cia_nome(c))}</td><td style="min-width:200px">{meter(a.p_pont)}</td>'
+        f'<td class="r num">{pc(a.p_canc)}</td><td class="r num">{min_txt(a.media_atr)}</td><td class="r num">{nf(a.prev)}</td></tr>'
+        for c, a in d["cias"])
+    tab = ('<div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th>'
+           f'<th scope="col" class="r">Atraso médio dos atrasados</th><th scope="col" class="r">Voos previstos</th></tr></thead><tbody>{linhas}</tbody></table></div>')
+    meses13 = [x for x in B.lista if x <= m][-13:]
+    graf = svg_barras([mes_curto(x) for x in meses13], [B.tot[x].p_pont if B.tot[x].med >= 10 else None for x in meses13],
+                      aria=f"Percentual de voos domésticos no horário nos 13 meses até {mes}")
+    itens = "".join(f"<li>{x}</li>" for x in resumo_destaques(B, d))
+    corpo = f"""
+<section class="hero">
+<span class="kicker">Resumo do mês · {mes}</span>
+<h1>{esc(manchete)}</h1>
+<p class="lead">{lead}</p>
+</section>
+{tiles_acc(T, T12)}
+<section class="card"><h2>O que mudou em {nome_mes(m)}</h2><ul class="destaques">{itens}</ul></section>
+<section class="card"><div class="card-head"><h2>Ranking das companhias</h2><span class="small">Companhias com mais de {nf(MIN_CIA_RANK)} voos no mês</span></div>{tab}
+<p class="nota">No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Fonte: ANAC, Voo Regular Ativo.</p></section>
+<section class="card"><h2>Pontualidade mês a mês</h2>{graf}</section>
+<section class="card"><h2>Compartilhe este resumo</h2><p class="small">Texto pronto para WhatsApp, LinkedIn ou e-mail.</p>
+<textarea id="post" class="fam-post" readonly rows="11">{esc(post)}</textarea>
+<div><button type="button" class="fam-btn" data-copiar="post"><span>Copiar texto</span></button> <span class="small" data-copiar-msg aria-live="polite"></span></div></section>
+"""
+    desc = (f"{cap(mes)}: {pc(T.p_pont)} dos voos domésticos no horário, {pc(T.p_canc)} cancelados. "
+            "O que mudou, companhias, aeroportos e rotas, com dados oficiais da ANAC.")
+    ld = {"@context": "https://schema.org", "@type": "Article", "headline": manchete, "inLanguage": "pt-BR",
+          "datePublished": B.gerado.strftime("%Y-%m-%d"), "author": {"@type": "Organization", "name": "Voo em Números", "url": BASE + "/"},
+          "mainEntityOfPage": f"{BASE}/resumo/{m}/"}
+    return pagina(B, f"/resumo/{m}/", f"{manchete} | Voo em Números", desc, corpo, "/resumo/",
+                  migalhas=[("/resumo/", "Resumos mensais"), (None, cap(mes))], jsonld=[ld])
+
+
+def pg_resumos(B: Base) -> str:
+    itens = "".join(
+        f'<li><a href="/resumo/{m}/"><b>{cap(mes_nome(m))}</b><span>{esc(resumo_manchete(resumo_dados(B, m)))}</span></a></li>'
+        for m in reversed(B.lista))
+    corpo = (f'<section class="hero"><span class="kicker">Resumos mensais</span><h1>A pontualidade dos voos mês a mês</h1>'
+             f'<p class="lead">Todo mês, quando a ANAC publica os dados, sai aqui um resumo com a manchete, o que mudou e o ranking de companhias, '
+             f'aeroportos e rotas.</p></section><section class="card"><ul class="lista-resumos">{itens}</ul></section>')
+    return pagina(B, "/resumo/", "Resumos mensais da pontualidade dos voos | Voo em Números",
+                  "Resumo mensal da pontualidade e dos cancelamentos dos voos domésticos no Brasil, com dados da ANAC.", corpo, "/resumo/",
+                  migalhas=[(None, "Resumos mensais")])
+
+
+def resumo_card_home(B: Base) -> str:
+    d = resumo_dados(B, B.ref)
+    return (f'<section class="card aviso"><div><span class="kicker">Resumo de {nome_mes(B.ref)}</span>'
+            f'<h2>{esc(resumo_manchete(d))}</h2></div><a class="btn" href="/resumo/{B.ref}/">Ler o resumo</a></section>')
+
+
 # ---------------------------------------------------------------- principal
 def cias_pag_pre(B: Base):
     return [c for c in {c for m in B.u12 for c in B.cia[m]} if B.soma(B.cia, c, B.u12).prev >= 300]
@@ -1912,7 +2052,7 @@ def main() -> int:
     cias_pag.sort(key=lambda c: -B.soma(B.cia, c, B.u12).prev)
     fim = periodo_fim(B)
     # páginas fixas que existem (o bloco "Continue explorando" só liga a páginas existentes)
-    B.fixas = {"/", "/companhias/", "/aeroportos/", "/rotas/", "/direitos/", "/mapa/"}
+    B.fixas = {"/", "/companhias/", "/aeroportos/", "/rotas/", "/direitos/", "/mapa/", "/resumo/"}
     if fim:
         B.fixas.add("/fim-de-ano/")
     if B.dem:
@@ -1938,6 +2078,9 @@ def main() -> int:
         pub(f"/voos/{B.voo_slug(*k)}/", pg_voo(B, k, voo_pag[k], voo_pag), "0.5")
     if fim:
         pub("/fim-de-ano/", pg_fim(B, fim, aero_pag), "0.9")
+    pub("/resumo/", pg_resumos(B), "0.8")
+    for m in B.lista:
+        pub(f"/resumo/{m}/", pg_resumo(B, m), "0.7" if m != B.ref else "0.9")
     pub("/direitos/", pg_direitos(B), "0.9")
     pub("/mapa/", pg_mapa(B, aero_pag), "0.8")
     if B.dem:
