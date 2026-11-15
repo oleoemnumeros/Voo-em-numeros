@@ -524,6 +524,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 </div>{familia_html()}</footer>
 <script src="/assets/app.js?v={v}" defer></script>
 <script src="/assets/familia.js?v={v}" defer></script>
+<script src="/assets/familia-graficos.js?v={v}" defer></script>
 {GOAT}
 </body>
 </html>
@@ -552,7 +553,13 @@ def tiles_acc(a: Acc, a0: Acc | None, rot_prev="Voos previstos") -> str:
     ]) + "</div>"
 
 
-def svg_barras(rotulos, valores, destaque_ultimo=True, altura=190, fmt=lambda v: pc(v, 0), cores=None, aria="", largura=720) -> str:
+def fam_gr(cfg: dict, svg: str, aria: str) -> str:
+    """Gráfico interativo (familia-graficos.js): os dados vão no atributo e o SVG de reserva fica dentro, valendo sem JavaScript."""
+    dados = html.escape(json.dumps({**cfg, "a": aria}, ensure_ascii=False, separators=(",", ":")), quote=True)
+    return f'<div class="fam-gr" data-fam-gr="{dados}">{svg}</div>'
+
+
+def svg_barras(rotulos, valores, destaque_ultimo=True, altura=190, fmt=lambda v: pc(v, 0), cores=None, aria="", largura=720, periodos=None) -> str:
     """Barras verticais de percentuais (0 a 100%), uma por rótulo."""
     n = len(valores)
     if not n:
@@ -578,16 +585,26 @@ def svg_barras(rotulos, valores, destaque_ultimo=True, altura=190, fmt=lambda v:
         out.append(f'<text x="{x + bw / 2:.1f}" y="{H - 8}" text-anchor="middle" font-size="12" fill="#5A6070">{esc(r)}</text>')
     out.append("</svg>")
     nota = f'<p class="nota">Eixo começa em {pc(mn, 0)} para mostrar melhor as diferenças.</p>' if mn > 0 else ""
-    return f'<div class="{cls}">' + "".join(out) + "</div>" + nota
+    serie = {"n": "No horário", "v": [round(v * 100, 2) if v is not None else None for v in valores], "c": "#2A9DE0"}
+    if cores:
+        serie["cs"] = list(cores)
+    cfg = {"t": "b", "p": list(periodos or rotulos), "d": 1, "suf": "%", "z": 0, "vl": 1, "s": [serie]}
+    if not destaque_ultimo:
+        cfg["hl"] = 0
+    if periodos is None:
+        cfg["w"] = 0
+    # com período em data o desenhista mostra o eixo e os botões de período; a nota do eixo truncado deixa de valer
+    return fam_gr(cfg, f'<div class="{cls}">' + "".join(out) + "</div>", aria)
 
 
-def serie_13(B: Base, tabela: dict, chave) -> tuple[list, list]:
+def serie_13(B: Base, tabela: dict, chave) -> tuple[list, list, list]:
+    """Pontualidade mês a mês em todos os meses da base (o gráfico oferece 1 ano e total); devolve rótulos, valores e períodos."""
     rot, val = [], []
-    for m in B.u13:
+    for m in B.lista:
         a = tabela[m].get(chave) if chave is not None else tabela[m]
         rot.append(mes_curto(m))
         val.append(a.p_pont if a and a.med >= 10 else None)
-    return rot, val
+    return rot, val, list(B.lista)
 
 
 def faq_html(pares) -> tuple[str, dict]:
@@ -650,7 +667,7 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
         f'<tr><td><a href="/voos/{B.voo_slug(c, n)}/">{esc(B.cod_voo(c, n))}</a></td><td class="wrap">{esc(voo_pag[(c, n)])}</td>'
         f'<td class="r num"><b>{pc(B.voo[B.ref][(c, n)].p_pont)}</b></td><td class="r num">{min_txt(B.voo[B.ref][(c, n)].media_atr)}</td></tr>'
         for c, n in voos[:10])
-    rot, val = serie_13(B, B.tot, None)
+    rot, val, pers = serie_13(B, B.tot, None)
     corpo = f"""
 <section class="hero">
 <span class="kicker">Voos domésticos · {mes}</span>
@@ -667,7 +684,7 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
 <section class="card"><div class="card-head"><h2>Ranking das companhias em {mes}</h2><span class="small">Companhias com mais de {nf(MIN_CIA_RANK)} voos no mês</span></div>
 {tab_cias}
 <p class="nota">No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC.</p></section>
-<section class="card"><h2>Pontualidade mês a mês</h2>{svg_barras(rot, val, aria="Percentual de voos domésticos no horário nos últimos 13 meses")}</section>
+<section class="card"><h2>Pontualidade mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria="Percentual de voos domésticos no horário mês a mês")}</section>
 <div class="grid2">
 <section class="card"><h2>Aeroportos mais pontuais</h2>{lista_aero(grandes[:6])}<p class="nota">Partidas no horário em {mes}, aeroportos com mais de {nf(MIN_AERO_RANK)} partidas.</p></section>
 <section class="card"><h2>Aeroportos menos pontuais</h2>{lista_aero(list(reversed(grandes[-6:])))}<p class="nota"><a href="/aeroportos/">Ver todos os aeroportos</a></p></section>
@@ -734,7 +751,7 @@ def pg_cia(B: Base, c: str, aero_pag, rota_pag, voo_pag) -> str:
     nome = B.cia_nome(c)
     a, a0, a12 = B.cia[B.ref].get(c, Acc()), B.cia.get(B.ant, {}).get(c), B.soma(B.cia, c, B.u12)
     mes = mes_nome(B.ref)
-    rot, val = serie_13(B, B.cia, c)
+    rot, val, pers = serie_13(B, B.cia, c)
     # aeroportos da companhia
     aer = [(o, x) for (cc, o), x in B.cia_aero[B.ref].items() if cc == c and x.prev >= 100 and o in aero_pag]
     aer.sort(key=lambda t: t[1].p_pont or 0)
@@ -779,7 +796,7 @@ def pg_cia(B: Base, c: str, aero_pag, rota_pag, voo_pag) -> str:
 <p class="lead">Em {mes}, <strong>{pc(a.p_pont)}</strong> dos voos domésticos da {esc(nome)} chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados.</p></section>
 {tiles_acc(a, a0)}
 {dem_cia(B, c)}
-<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de voos da {nome} no horário nos últimos 13 meses")}</section>
+<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria=f"Percentual de voos da {nome} no horário mês a mês")}</section>
 <section class="card"><div class="card-head"><h2>Aeroportos com mais atrasos da {esc(nome)}</h2><span class="small">Partidas em {mes}, mínimo de 100</span></div>
 <div class="tw"><table><thead><tr><th scope="col">Aeroporto</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Partidas</th></tr></thead><tbody>{linhas_aer}</tbody></table></div></section>
 <div class="grid2">
@@ -822,7 +839,7 @@ def pg_aero(B: Base, o: str, rota_pag, voo_pag) -> str:
     base_txt = mes
     if a.prev < 30:
         a, a0, base_txt = a3, None, "últimos 3 meses"
-    rot, val = serie_13(B, B.aero, o)
+    rot, val, pers = serie_13(B, B.aero, o)
     # companhias
     cs = [(c, x) for (c, oo), x in B.cia_aero[B.ref].items() if oo == o and x.prev >= 10]
     cs.sort(key=lambda t: -t[1].prev)
@@ -858,7 +875,7 @@ def pg_aero(B: Base, o: str, rota_pag, voo_pag) -> str:
 <p class="lead">Partidas de voos domésticos regulares. Em {base_txt}, <strong>{pc(a.p_pont)}</strong> chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados.</p></section>
 {tiles_acc(a, a0, "Partidas previstas")}
 {dem_aero(B, o)}
-<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de partidas de {cod} no horário nos últimos 13 meses")}</section>
+<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria=f"Percentual de partidas de {cod} no horário mês a mês")}</section>
 <section class="card"><div class="card-head"><h2>Por companhia em {mes}</h2></div><div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Partidas</th></tr></thead><tbody>{lin_c}</tbody></table></div></section>
 <section class="card"><div class="card-head"><h2>Destinos a partir de {esc(cod)}</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Destino</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_d}</tbody></table></div></section>
 {f'<section class="card"><div class="card-head"><h2>Voos que mais atrasam saindo de {esc(cod)}</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Trecho</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Atraso médio dos atrasados</th></tr></thead><tbody>{lin_v}</tbody></table></div></section>' if lin_v else ""}
@@ -895,7 +912,7 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
     mes = mes_nome(B.ref)
     usa_mes = am is not None and am.prev >= 30
     a, a0, base_txt = (am, am0, mes) if usa_mes else (a3, None, "últimos 3 meses")
-    rot, val = serie_13(B, B.rota, (o, d))
+    rot, val, pers = serie_13(B, B.rota, (o, d))
     # companhias
     cs = []
     for c in {k[0] for m in B.u3 for k in B.cia_rota[m] if k[1] == o and k[2] == d}:
@@ -987,7 +1004,7 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
 <section class="card"><h2>Melhor horário para voar</h2>{per_html or '<p class="small">Poucos voos para comparar os horários.</p>'}<p class="nota">Pelo horário previsto de saída, últimos 3 meses.</p></section>
 <section class="card"><h2>Por dia da semana</h2>{sem_html}</section>
 </div>
-<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de voos {co}-{cd} no horário nos últimos 13 meses")}</section>
+<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria=f"Percentual de voos {co}-{cd} no horário mês a mês")}</section>
 {rel_html}
 {aviso_direitos()}
 {faq}"""
@@ -1013,7 +1030,7 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
     a = Acc()
     for _, x in legs:
         a.soma(x)
-    rot, val = serie_13(B, B.voo, k)
+    rot, val, pers = serie_13(B, B.voo, k)
     lin_l = []
     for (o, d), x in legs:
         hora = B.voo_hora[(c, n, o, d)].most_common(1)[0][0] if B.voo_hora[(c, n, o, d)] else ""
@@ -1057,7 +1074,7 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 <section class="card"><h2>Quanto ele atrasa</h2>{dist_html}<p class="nota">Atraso na chegada das {nf(a.med)} viagens realizadas nos últimos 3 meses.</p></section>
 <section class="card"><div class="card-head"><h2>Outros voos {esc(B.cod(o))} → {esc(B.cod(d))}</h2><span class="small">Do mais ao menos pontual</span></div><div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Companhia</th><th scope="col">Saída</th><th scope="col" class="r">No horário</th></tr></thead><tbody>{lin_o}</tbody></table></div></section>
 </div>
-<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de viagens do voo {cod} no horário nos últimos 13 meses")}</section>
+<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria=f"Percentual de viagens do voo {cod} no horário mês a mês")}</section>
 {aviso_direitos()}
 {faq}"""
     return pagina(B, f"/voos/{B.voo_slug(c, n)}/", f"Voo {cod} ({cia}) {trecho}: atrasos e cancelamentos | Voo em Números",
@@ -1528,6 +1545,7 @@ class Demanda:
             self.cia[m], self.aero[m], self.rota[m] = C, A, R
         ms = sorted(m for m in self.mensal if m <= self.ref)
         self.u13 = ms[-13:]
+        self.todos = ms
 
 
 def abrevia(v: float) -> str:
@@ -1614,7 +1632,7 @@ def forca(r: float) -> str:
     return "muito fraca" if a < 0.2 else "fraca" if a < 0.4 else "moderada" if a < 0.6 else "forte" if a < 0.8 else "muito forte"
 
 
-def svg_barras_valor(rotulos, valores, fmt, aria="", altura=190, largura=720) -> str:
+def svg_barras_valor(rotulos, valores, fmt, aria="", altura=190, largura=720, periodos=None) -> str:
     n = len(valores)
     W, H, top, base = largura, altura, 22, altura - 26
     mx = max(valores) if valores else 1
@@ -1630,7 +1648,9 @@ def svg_barras_valor(rotulos, valores, fmt, aria="", altura=190, largura=720) ->
         out.append(f'<text x="{x + bw / 2:.1f}" y="{base - h - 6:.1f}" text-anchor="middle" font-size="12" fill="#3D424A" font-weight="{700 if ult else 400}">{esc(fmt(v))}</text>')
         out.append(f'<text x="{x + bw / 2:.1f}" y="{H - 8}" text-anchor="middle" font-size="12" fill="#5A6070">{esc(r)}</text>')
     out.append("</svg>")
-    return '<div class="chart">' + "".join(out) + "</div>"
+    cfg = {"t": "b", "p": list(periodos or rotulos), "d": 1, "suf": " mi", "u": "milhões", "vl": 1, "vd": 1,
+           "s": [{"n": "Passageiros", "v": [round(v / 1e6, 3) for v in valores], "c": "#2A9DE0"}]}
+    return fam_gr(cfg, '<div class="chart">' + "".join(out) + "</div>", aria)
 
 
 def svg_dispersao(B, pts) -> str:
@@ -1679,10 +1699,10 @@ def pg_demanda(B: Base, aero_pag, rota_pag) -> str:
     mes = mes_nome(D.ref)
     T, T0 = D.mensal[D.ref], D.mensal.get(D.ant)
     # evolução
-    rot = [mes_curto(m) for m in D.u13]
-    graf_pax = svg_barras_valor(rot, [D.mensal[m].pax for m in D.u13], lambda v: nf(v / 1e6, 1),
-                                aria="Passageiros pagos, em milhões, nos últimos 13 meses")
-    graf_oc = svg_barras(rot, [D.mensal[m].ocup for m in D.u13], aria="Ocupação dos voos nos últimos 13 meses")
+    rot = [mes_curto(m) for m in D.todos]
+    graf_pax = svg_barras_valor(rot, [D.mensal[m].pax for m in D.todos], lambda v: nf(v / 1e6, 1), periodos=D.todos,
+                                aria="Passageiros pagos, em milhões, mês a mês")
+    graf_oc = svg_barras(rot, [D.mensal[m].ocup for m in D.todos], periodos=D.todos, aria="Ocupação dos voos mês a mês")
     # companhias
     cs = sorted(((c, x) for c, x in D.cia[D.ref].items() if x.pax >= 20000), key=lambda t: -t[1].pax)
     lin_c = "".join(f'<tr><td>{B.link_cia(c)}</td><td class="r num">{abrevia(x.pax)}</td><td class="r num">{pc(x.pax / T.pax)}</td>'
@@ -1832,7 +1852,8 @@ def gerar_imagens(B: Base):
         d.text((x, 200), rot, font=f(False, 28), fill=MUT)
         d.text((x, 238), val, font=f(True, 58), fill=INK)
         x += 370
-    rot, val = serie_13(B, B.tot, None)
+    rot, val, pers = serie_13(B, B.tot, None)
+    rot, val = rot[-13:], val[-13:]
     topo, base = 360, H - 70
     vals = [v for v in val if v is not None]
     mn = max(0, min(vals) - 0.1)
@@ -1955,9 +1976,9 @@ def pg_resumo(B: Base, m: str) -> str:
         for c, a in d["cias"])
     tab = ('<div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th>'
            f'<th scope="col" class="r">Atraso médio dos atrasados</th><th scope="col" class="r">Voos previstos</th></tr></thead><tbody>{linhas}</tbody></table></div>')
-    meses13 = [x for x in B.lista if x <= m][-13:]
+    meses13 = [x for x in B.lista if x <= m]
     graf = svg_barras([mes_curto(x) for x in meses13], [B.tot[x].p_pont if B.tot[x].med >= 10 else None for x in meses13],
-                      aria=f"Percentual de voos domésticos no horário nos 13 meses até {mes}")
+                      periodos=meses13, aria=f"Percentual de voos domésticos no horário mês a mês até {mes}")
     itens = "".join(f"<li>{x}</li>" for x in resumo_destaques(B, d))
     corpo = f"""
 <section class="hero">
@@ -2114,6 +2135,7 @@ def main() -> int:
     shutil.copy(SITE / "estilo.css", SAIDA / "assets" / "estilo.css")
     shutil.copy(SITE / "app.js", SAIDA / "assets" / "app.js")
     shutil.copy(SITE / "familia.js", SAIDA / "assets" / "familia.js")
+    shutil.copy(SITE / "familia-graficos.js", SAIDA / "assets" / "familia-graficos.js")
     (SAIDA / "favicon.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>',
