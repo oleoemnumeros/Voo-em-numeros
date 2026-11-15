@@ -27,10 +27,10 @@ GOAT = '<script data-goatcounter="https://vooemnumeros.goatcounter.com/count" as
 
 # Família em Números: para incluir um novo portal, acrescente uma linha nesta lista
 FAMILIA = [
-    ("Óleo em Números", "Petróleo e gás", "https://oleoemnumeros.com.br/", "#F59E0B"),
-    ("Comex em Números", "Exportações e importações", "https://comexemnumeros.com.br/", "#37C0A5"),
-    ("Voo em Números", "Pontualidade aérea", "https://vooemnumeros.com.br/", "#A58BF0"),
-    ("Economia em Números", "Macroeconomia", "https://economiaemnumeros.com.br/", "#7EA3FF"),
+    ("Óleo em Números", "Petróleo e gás", "https://oleoemnumeros.com.br/", "#17758C"),
+    ("Comex em Números", "Exportações e importações", "https://comexemnumeros.com.br/", "#1F85D0"),
+    ("Voo em Números", "Pontualidade aérea", "https://vooemnumeros.com.br/", "#4FB8EE"),
+    ("Economia em Números", "Macroeconomia", "https://economiaemnumeros.com.br/", "#D9A514"),
 ]
 ATUAL = "Voo em Números"
 
@@ -336,10 +336,10 @@ def familia_html() -> str:
 # ---------------------------------------------------------------- Continue explorando (entre os portais)
 # Para incluir um novo portal, acrescente uma linha aqui e em FAMILIA.
 PORTAIS = {
-    "oleo": ("Óleo em Números", "https://oleoemnumeros.com.br", "#F59E0B"),
-    "comex": ("Comex em Números", "https://comexemnumeros.com.br", "#37C0A5"),
-    "voo": ("Voo em Números", BASE, "#A58BF0"),
-    "economia": ("Economia em Números", "https://economiaemnumeros.com.br", "#7EA3FF"),
+    "oleo": ("Óleo em Números", "https://oleoemnumeros.com.br", "#17758C"),
+    "comex": ("Comex em Números", "https://comexemnumeros.com.br", "#1F85D0"),
+    "voo": ("Voo em Números", BASE, "#4FB8EE"),
+    "economia": ("Economia em Números", "https://economiaemnumeros.com.br", "#D9A514"),
 }
 ESTE = "voo"
 
@@ -450,7 +450,7 @@ def continue_padrao(caminho: str) -> list:
 
 NAV = [("/", "Início"), ("/companhias/", "Companhias"), ("/aeroportos/", "Aeroportos"), ("/rotas/", "Rotas"), ("/mapa/", "Mapa"), ("/demanda/", "Passageiros"),
        ("/fim-de-ano/", "Fim de ano"), ("/direitos/", "Seus direitos"), ("/sobre/", "Como funciona")]
-LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#5B3FC4"/>'
+LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>')
 
 
@@ -496,7 +496,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#5B3FC4">
+<meta name="theme-color" content="#2A9DE0">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -523,6 +523,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a></span>
 </div>{familia_html()}</footer>
 <script src="/assets/app.js?v={v}" defer></script>
+<script src="/assets/familia.js?v={v}" defer></script>
 {GOAT}
 </body>
 </html>
@@ -564,13 +565,13 @@ def svg_barras(rotulos, valores, destaque_ultimo=True, altura=190, fmt=lambda v:
     passo = (W - 20) / n
     bw = min(46, passo * 0.66)
     out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{esc(aria)}">']
-    out.append(f'<line x1="10" y1="{base}" x2="{W - 10}" y2="{base}" stroke="#C9C6D6"/>')
+    out.append(f'<line x1="10" y1="{base}" x2="{W - 10}" y2="{base}" stroke="#C6D2DC"/>')
     for i, (r, v) in enumerate(zip(rotulos, valores)):
         x = 10 + i * passo + (passo - bw) / 2
         ult = destaque_ultimo and i == n - 1
         if v is not None:
             h = max(2, (v - mn) / (1 - mn) * (base - top)) if 1 - mn else 2
-            cor = (cores[i] if cores else ("#5B3FC4" if ult else "#B9AEE8"))
+            cor = (cores[i] if cores else ("#2A9DE0" if ult else "#A9D8F5"))
             out.append(f'<rect x="{x:.1f}" y="{base - h:.1f}" width="{bw:.1f}" height="{h:.1f}" rx="3" fill="{cor}"/>')
             out.append(f'<text x="{x + bw / 2:.1f}" y="{base - h - 6:.1f}" text-anchor="middle" font-size="12" '
                        f'fill="#3D424A" font-weight="{700 if ult else 400}">{esc(fmt(v))}</text>')
@@ -934,7 +935,7 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
             sem[i][1] += pont
     sem_val = [(p / m if m >= 8 else None) for m, p in sem]
     validos = [v for v in sem_val if v is not None]
-    cores = ["#C2410C" if (v is not None and validos and v == min(validos)) else "#5B3FC4" for v in sem_val]
+    cores = ["#C2410C" if (v is not None and validos and v == min(validos)) else "#2A9DE0" for v in sem_val]
     sem_html = svg_barras(DIAS_CURTO, sem_val, destaque_ultimo=False, altura=200, cores=cores, largura=420,
                           aria=f"Pontualidade por dia da semana na rota {co}-{cd}") if len(validos) >= 5 else '<p class="small">Poucos voos para comparar os dias da semana.</p>'
     dur = ""
@@ -1113,7 +1114,7 @@ def pg_fim(B: Base, fim, aero_pag) -> str:
     rots = [f"{d.day:02d}/{d.month:02d}" for d in fim["dias"]]
     validos = [v for v in vals if v is not None]
     corte = sorted(validos)[2] if len(validos) > 3 else 0
-    cores = ["#C2410C" if v is not None and v <= corte else "#5B3FC4" for v in vals]
+    cores = ["#C2410C" if v is not None and v <= corte else "#2A9DE0" for v in vals]
     graf = svg_barras(rots, vals, destaque_ultimo=False, altura=210, cores=cores,
                       aria=f"Pontualidade diária dos voos domésticos de 19/12/{ano} a 04/01/{ano + 1}")
     piores = sorted([(k, v) for k, v in zip(fim["dias"], vals) if v is not None], key=lambda t: t[1])[:3]
@@ -1619,12 +1620,12 @@ def svg_barras_valor(rotulos, valores, fmt, aria="", altura=190, largura=720) ->
     passo = (W - 20) / n
     bw = min(46, passo * 0.66)
     out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{esc(aria)}">',
-           f'<line x1="10" y1="{base}" x2="{W - 10}" y2="{base}" stroke="#C9C6D6"/>']
+           f'<line x1="10" y1="{base}" x2="{W - 10}" y2="{base}" stroke="#C6D2DC"/>']
     for i, (r, v) in enumerate(zip(rotulos, valores)):
         x = 10 + i * passo + (passo - bw) / 2
         h = max(2, v / mx * (base - top))
         ult = i == n - 1
-        out.append(f'<rect x="{x:.1f}" y="{base - h:.1f}" width="{bw:.1f}" height="{h:.1f}" rx="3" fill="{"#5B3FC4" if ult else "#B9AEE8"}"/>')
+        out.append(f'<rect x="{x:.1f}" y="{base - h:.1f}" width="{bw:.1f}" height="{h:.1f}" rx="3" fill="{"#2A9DE0" if ult else "#A9D8F5"}"/>')
         out.append(f'<text x="{x + bw / 2:.1f}" y="{base - h - 6:.1f}" text-anchor="middle" font-size="12" fill="#3D424A" font-weight="{700 if ult else 400}">{esc(fmt(v))}</text>')
         out.append(f'<text x="{x + bw / 2:.1f}" y="{H - 8}" text-anchor="middle" font-size="12" fill="#5A6070">{esc(r)}</text>')
     out.append("</svg>")
@@ -1645,12 +1646,12 @@ def svg_dispersao(B, pts) -> str:
     out = [f'<svg class="disp" viewBox="0 0 {W} {H}" role="img" aria-label="Gráfico de dispersão: passageiros embarcados e pontualidade de cada aeroporto em {mes_nome(B.dem.ref)}">']
     y = y0
     while y <= y1 + 1e-9:
-        out.append(f'<line x1="{ml}" y1="{py(y):.1f}" x2="{W - mr}" y2="{py(y):.1f}" stroke="#EFEEF4"/>'
+        out.append(f'<line x1="{ml}" y1="{py(y):.1f}" x2="{W - mr}" y2="{py(y):.1f}" stroke="#EAEFF3"/>'
                    f'<text x="{ml - 8}" y="{py(y) + 4:.1f}" text-anchor="end" font-size="12" fill="#5A6070">{pc(y, 0)}</text>')
         y += 0.05
     for e, rot in ((3, "1 mil"), (4, "10 mil"), (5, "100 mil"), (6, "1 milhão")):
         if x0 <= e <= x1:
-            out.append(f'<line x1="{px(e):.1f}" y1="{mt}" x2="{px(e):.1f}" y2="{H - mb}" stroke="#EFEEF4"/>'
+            out.append(f'<line x1="{px(e):.1f}" y1="{mt}" x2="{px(e):.1f}" y2="{H - mb}" stroke="#EAEFF3"/>'
                        f'<text x="{px(e):.1f}" y="{H - mb + 18}" text-anchor="middle" font-size="12" fill="#5A6070">{rot}</text>')
     out.append(f'<text x="{(ml + W - mr) / 2:.0f}" y="{H - 6}" text-anchor="middle" font-size="12" fill="#3D424A">Passageiros embarcados no mês (escala logarítmica)</text>')
     n = len(xs); mx, my = sum(xs) / n, sum(ys) / n
@@ -1658,12 +1659,12 @@ def svg_dispersao(B, pts) -> str:
     if sxx:
         b = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx
         a = my - b * mx
-        out.append(f'<line x1="{px(x0):.1f}" y1="{py(a + b * x0):.1f}" x2="{px(x1):.1f}" y2="{py(a + b * x1):.1f}" stroke="#5B3FC4" stroke-width="1.5" stroke-dasharray="5 4"/>')
+        out.append(f'<line x1="{px(x0):.1f}" y1="{py(a + b * x0):.1f}" x2="{px(x1):.1f}" y2="{py(a + b * x1):.1f}" stroke="#2A9DE0" stroke-width="1.5" stroke-dasharray="5 4"/>')
     rotulados = {p[0] for p in sorted(pts, key=lambda t: -t[1])[:8]} | {max(pts, key=lambda t: t[2])[0], min(pts, key=lambda t: t[2])[0]}
     for o, pax, pp in pts:
         cx, cy = px(math.log10(pax)), py(pp)
         nome = f"{B.cod(o)} · {B.aero_nome(o)}: {nf(pax)} passageiros, {pc(pp)} no horário"
-        circ = f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="5" fill="#5B3FC4" fill-opacity=".72" stroke="#fff" stroke-width="1"><title>{esc(nome)}</title></circle>'
+        circ = f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="5" fill="#2A9DE0" fill-opacity=".72" stroke="#fff" stroke-width="1"><title>{esc(nome)}</title></circle>'
         out.append(f'<a href="/aeroportos/{B.aero_slug(o)}/">{circ}</a>')
         if o in rotulados:
             out.append(f'<text class="rt" x="{cx + 7:.1f}" y="{cy + 4:.1f}" font-size="11" font-weight="600" fill="#14161A">{esc(B.cod(o))}</text>')
@@ -1969,8 +1970,9 @@ def main() -> int:
     # arquivos fixos
     shutil.copy(SITE / "estilo.css", SAIDA / "assets" / "estilo.css")
     shutil.copy(SITE / "app.js", SAIDA / "assets" / "app.js")
+    shutil.copy(SITE / "familia.js", SAIDA / "assets" / "familia.js")
     (SAIDA / "favicon.svg").write_text(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30"><rect x="1" y="1" width="28" height="28" rx="7" fill="#5B3FC4"/>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>',
         encoding="utf-8")
     gerar_imagens(B)
