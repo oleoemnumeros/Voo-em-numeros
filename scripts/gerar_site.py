@@ -27,10 +27,10 @@ GOAT = '<script data-goatcounter="https://vooemnumeros.goatcounter.com/count" as
 
 # Família em Números: para incluir um novo portal, acrescente uma linha nesta lista
 FAMILIA = [
-    ("Óleo em Números", "Petróleo e gás", "https://oleoemnumeros.com.br/", "#F59E0B"),
-    ("Comex em Números", "Exportações e importações", "https://comexemnumeros.com.br/", "#37C0A5"),
-    ("Voo em Números", "Pontualidade aérea", "https://vooemnumeros.com.br/", "#A58BF0"),
-    ("Economia em Números", "Macroeconomia", "https://economiaemnumeros.com.br/", "#7EA3FF"),
+    ("Óleo em Números", "Petróleo e gás", "https://oleoemnumeros.com.br/", "#17758C"),
+    ("Comex em Números", "Exportações e importações", "https://comexemnumeros.com.br/", "#1F85D0"),
+    ("Voo em Números", "Pontualidade aérea", "https://vooemnumeros.com.br/", "#4FB8EE"),
+    ("Economia em Números", "Macroeconomia", "https://economiaemnumeros.com.br/", "#D9A514"),
 ]
 ATUAL = "Voo em Números"
 
@@ -336,10 +336,10 @@ def familia_html() -> str:
 # ---------------------------------------------------------------- Continue explorando (entre os portais)
 # Para incluir um novo portal, acrescente uma linha aqui e em FAMILIA.
 PORTAIS = {
-    "oleo": ("Óleo em Números", "https://oleoemnumeros.com.br", "#F59E0B"),
-    "comex": ("Comex em Números", "https://comexemnumeros.com.br", "#37C0A5"),
-    "voo": ("Voo em Números", BASE, "#A58BF0"),
-    "economia": ("Economia em Números", "https://economiaemnumeros.com.br", "#7EA3FF"),
+    "oleo": ("Óleo em Números", "https://oleoemnumeros.com.br", "#17758C"),
+    "comex": ("Comex em Números", "https://comexemnumeros.com.br", "#1F85D0"),
+    "voo": ("Voo em Números", BASE, "#4FB8EE"),
+    "economia": ("Economia em Números", "https://economiaemnumeros.com.br", "#D9A514"),
 }
 ESTE = "voo"
 
@@ -449,8 +449,8 @@ def continue_padrao(caminho: str) -> list:
 
 
 NAV = [("/", "Início"), ("/companhias/", "Companhias"), ("/aeroportos/", "Aeroportos"), ("/rotas/", "Rotas"), ("/mapa/", "Mapa"), ("/demanda/", "Passageiros"),
-       ("/fim-de-ano/", "Fim de ano"), ("/direitos/", "Seus direitos"), ("/sobre/", "Como funciona")]
-LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#5B3FC4"/>'
+       ("/resumo/", "Resumos"), ("/fim-de-ano/", "Fim de ano"), ("/direitos/", "Seus direitos"), ("/sobre/", "Como funciona")]
+LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>')
 
 
@@ -496,7 +496,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#5B3FC4">
+<meta name="theme-color" content="#2A9DE0">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -520,9 +520,11 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <footer><div>
 <span><strong>Voo em Números</strong> · versão beta</span>
 <span>Voos domésticos regulares de passageiros. No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Cancelados contam sobre os voos previstos.</span>
-<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a></span>
+<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/resumo/">Resumos</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a></span>
 </div>{familia_html()}</footer>
 <script src="/assets/app.js?v={v}" defer></script>
+<script src="/assets/familia.js?v={v}" defer></script>
+<script src="/assets/familia-graficos.js?v={v}" defer></script>
 {GOAT}
 </body>
 </html>
@@ -551,7 +553,13 @@ def tiles_acc(a: Acc, a0: Acc | None, rot_prev="Voos previstos") -> str:
     ]) + "</div>"
 
 
-def svg_barras(rotulos, valores, destaque_ultimo=True, altura=190, fmt=lambda v: pc(v, 0), cores=None, aria="", largura=720) -> str:
+def fam_gr(cfg: dict, svg: str, aria: str) -> str:
+    """Gráfico interativo (familia-graficos.js): os dados vão no atributo e o SVG de reserva fica dentro, valendo sem JavaScript."""
+    dados = html.escape(json.dumps({**cfg, "a": aria}, ensure_ascii=False, separators=(",", ":")), quote=True)
+    return f'<div class="fam-gr" data-fam-gr="{dados}">{svg}</div>'
+
+
+def svg_barras(rotulos, valores, destaque_ultimo=True, altura=190, fmt=lambda v: pc(v, 0), cores=None, aria="", largura=720, periodos=None) -> str:
     """Barras verticais de percentuais (0 a 100%), uma por rótulo."""
     n = len(valores)
     if not n:
@@ -564,29 +572,39 @@ def svg_barras(rotulos, valores, destaque_ultimo=True, altura=190, fmt=lambda v:
     passo = (W - 20) / n
     bw = min(46, passo * 0.66)
     out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{esc(aria)}">']
-    out.append(f'<line x1="10" y1="{base}" x2="{W - 10}" y2="{base}" stroke="#C9C6D6"/>')
+    out.append(f'<line x1="10" y1="{base}" x2="{W - 10}" y2="{base}" stroke="#C6D2DC"/>')
     for i, (r, v) in enumerate(zip(rotulos, valores)):
         x = 10 + i * passo + (passo - bw) / 2
         ult = destaque_ultimo and i == n - 1
         if v is not None:
             h = max(2, (v - mn) / (1 - mn) * (base - top)) if 1 - mn else 2
-            cor = (cores[i] if cores else ("#5B3FC4" if ult else "#B9AEE8"))
+            cor = (cores[i] if cores else ("#2A9DE0" if ult else "#A9D8F5"))
             out.append(f'<rect x="{x:.1f}" y="{base - h:.1f}" width="{bw:.1f}" height="{h:.1f}" rx="3" fill="{cor}"/>')
             out.append(f'<text x="{x + bw / 2:.1f}" y="{base - h - 6:.1f}" text-anchor="middle" font-size="12" '
                        f'fill="#3D424A" font-weight="{700 if ult else 400}">{esc(fmt(v))}</text>')
         out.append(f'<text x="{x + bw / 2:.1f}" y="{H - 8}" text-anchor="middle" font-size="12" fill="#5A6070">{esc(r)}</text>')
     out.append("</svg>")
     nota = f'<p class="nota">Eixo começa em {pc(mn, 0)} para mostrar melhor as diferenças.</p>' if mn > 0 else ""
-    return f'<div class="{cls}">' + "".join(out) + "</div>" + nota
+    serie = {"n": "No horário", "v": [round(v * 100, 2) if v is not None else None for v in valores], "c": "#2A9DE0"}
+    if cores:
+        serie["cs"] = list(cores)
+    cfg = {"t": "b", "p": list(periodos or rotulos), "d": 1, "suf": "%", "z": 0, "vl": 1, "s": [serie]}
+    if not destaque_ultimo:
+        cfg["hl"] = 0
+    if periodos is None:
+        cfg["w"] = 0
+    # com período em data o desenhista mostra o eixo e os botões de período; a nota do eixo truncado deixa de valer
+    return fam_gr(cfg, f'<div class="{cls}">' + "".join(out) + "</div>", aria)
 
 
-def serie_13(B: Base, tabela: dict, chave) -> tuple[list, list]:
+def serie_13(B: Base, tabela: dict, chave) -> tuple[list, list, list]:
+    """Pontualidade mês a mês em todos os meses da base (o gráfico oferece 1 ano e total); devolve rótulos, valores e períodos."""
     rot, val = [], []
-    for m in B.u13:
+    for m in B.lista:
         a = tabela[m].get(chave) if chave is not None else tabela[m]
         rot.append(mes_curto(m))
         val.append(a.p_pont if a and a.med >= 10 else None)
-    return rot, val
+    return rot, val, list(B.lista)
 
 
 def faq_html(pares) -> tuple[str, dict]:
@@ -649,7 +667,7 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
         f'<tr><td><a href="/voos/{B.voo_slug(c, n)}/">{esc(B.cod_voo(c, n))}</a></td><td class="wrap">{esc(voo_pag[(c, n)])}</td>'
         f'<td class="r num"><b>{pc(B.voo[B.ref][(c, n)].p_pont)}</b></td><td class="r num">{min_txt(B.voo[B.ref][(c, n)].media_atr)}</td></tr>'
         for c, n in voos[:10])
-    rot, val = serie_13(B, B.tot, None)
+    rot, val, pers = serie_13(B, B.tot, None)
     corpo = f"""
 <section class="hero">
 <span class="kicker">Voos domésticos · {mes}</span>
@@ -659,13 +677,14 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
 <input id="busca" type="search" autocomplete="off" placeholder="Voo (LA 3300), rota (GRU SSA), cidade ou aeroporto"><div id="busca-res" aria-live="polite"></div></div>
 </section>
 {fim_card(B, fim)}
+{resumo_card_home(B)}
 {tiles_acc(T, T0)}
 {mapa_card_home(B, aero_pag)}
 {dem_card_home(B)}
 <section class="card"><div class="card-head"><h2>Ranking das companhias em {mes}</h2><span class="small">Companhias com mais de {nf(MIN_CIA_RANK)} voos no mês</span></div>
 {tab_cias}
 <p class="nota">No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC.</p></section>
-<section class="card"><h2>Pontualidade mês a mês</h2>{svg_barras(rot, val, aria="Percentual de voos domésticos no horário nos últimos 13 meses")}</section>
+<section class="card"><h2>Pontualidade mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria="Percentual de voos domésticos no horário mês a mês")}</section>
 <div class="grid2">
 <section class="card"><h2>Aeroportos mais pontuais</h2>{lista_aero(grandes[:6])}<p class="nota">Partidas no horário em {mes}, aeroportos com mais de {nf(MIN_AERO_RANK)} partidas.</p></section>
 <section class="card"><h2>Aeroportos menos pontuais</h2>{lista_aero(list(reversed(grandes[-6:])))}<p class="nota"><a href="/aeroportos/">Ver todos os aeroportos</a></p></section>
@@ -732,7 +751,7 @@ def pg_cia(B: Base, c: str, aero_pag, rota_pag, voo_pag) -> str:
     nome = B.cia_nome(c)
     a, a0, a12 = B.cia[B.ref].get(c, Acc()), B.cia.get(B.ant, {}).get(c), B.soma(B.cia, c, B.u12)
     mes = mes_nome(B.ref)
-    rot, val = serie_13(B, B.cia, c)
+    rot, val, pers = serie_13(B, B.cia, c)
     # aeroportos da companhia
     aer = [(o, x) for (cc, o), x in B.cia_aero[B.ref].items() if cc == c and x.prev >= 100 and o in aero_pag]
     aer.sort(key=lambda t: t[1].p_pont or 0)
@@ -777,7 +796,7 @@ def pg_cia(B: Base, c: str, aero_pag, rota_pag, voo_pag) -> str:
 <p class="lead">Em {mes}, <strong>{pc(a.p_pont)}</strong> dos voos domésticos da {esc(nome)} chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados.</p></section>
 {tiles_acc(a, a0)}
 {dem_cia(B, c)}
-<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de voos da {nome} no horário nos últimos 13 meses")}</section>
+<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria=f"Percentual de voos da {nome} no horário mês a mês")}</section>
 <section class="card"><div class="card-head"><h2>Aeroportos com mais atrasos da {esc(nome)}</h2><span class="small">Partidas em {mes}, mínimo de 100</span></div>
 <div class="tw"><table><thead><tr><th scope="col">Aeroporto</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Partidas</th></tr></thead><tbody>{linhas_aer}</tbody></table></div></section>
 <div class="grid2">
@@ -820,7 +839,7 @@ def pg_aero(B: Base, o: str, rota_pag, voo_pag) -> str:
     base_txt = mes
     if a.prev < 30:
         a, a0, base_txt = a3, None, "últimos 3 meses"
-    rot, val = serie_13(B, B.aero, o)
+    rot, val, pers = serie_13(B, B.aero, o)
     # companhias
     cs = [(c, x) for (c, oo), x in B.cia_aero[B.ref].items() if oo == o and x.prev >= 10]
     cs.sort(key=lambda t: -t[1].prev)
@@ -856,7 +875,7 @@ def pg_aero(B: Base, o: str, rota_pag, voo_pag) -> str:
 <p class="lead">Partidas de voos domésticos regulares. Em {base_txt}, <strong>{pc(a.p_pont)}</strong> chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados.</p></section>
 {tiles_acc(a, a0, "Partidas previstas")}
 {dem_aero(B, o)}
-<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de partidas de {cod} no horário nos últimos 13 meses")}</section>
+<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria=f"Percentual de partidas de {cod} no horário mês a mês")}</section>
 <section class="card"><div class="card-head"><h2>Por companhia em {mes}</h2></div><div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Partidas</th></tr></thead><tbody>{lin_c}</tbody></table></div></section>
 <section class="card"><div class="card-head"><h2>Destinos a partir de {esc(cod)}</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Destino</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_d}</tbody></table></div></section>
 {f'<section class="card"><div class="card-head"><h2>Voos que mais atrasam saindo de {esc(cod)}</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Trecho</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Atraso médio dos atrasados</th></tr></thead><tbody>{lin_v}</tbody></table></div></section>' if lin_v else ""}
@@ -893,7 +912,7 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
     mes = mes_nome(B.ref)
     usa_mes = am is not None and am.prev >= 30
     a, a0, base_txt = (am, am0, mes) if usa_mes else (a3, None, "últimos 3 meses")
-    rot, val = serie_13(B, B.rota, (o, d))
+    rot, val, pers = serie_13(B, B.rota, (o, d))
     # companhias
     cs = []
     for c in {k[0] for m in B.u3 for k in B.cia_rota[m] if k[1] == o and k[2] == d}:
@@ -934,7 +953,7 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
             sem[i][1] += pont
     sem_val = [(p / m if m >= 8 else None) for m, p in sem]
     validos = [v for v in sem_val if v is not None]
-    cores = ["#C2410C" if (v is not None and validos and v == min(validos)) else "#5B3FC4" for v in sem_val]
+    cores = ["#C2410C" if (v is not None and validos and v == min(validos)) else "#2A9DE0" for v in sem_val]
     sem_html = svg_barras(DIAS_CURTO, sem_val, destaque_ultimo=False, altura=200, cores=cores, largura=420,
                           aria=f"Pontualidade por dia da semana na rota {co}-{cd}") if len(validos) >= 5 else '<p class="small">Poucos voos para comparar os dias da semana.</p>'
     dur = ""
@@ -985,7 +1004,7 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
 <section class="card"><h2>Melhor horário para voar</h2>{per_html or '<p class="small">Poucos voos para comparar os horários.</p>'}<p class="nota">Pelo horário previsto de saída, últimos 3 meses.</p></section>
 <section class="card"><h2>Por dia da semana</h2>{sem_html}</section>
 </div>
-<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de voos {co}-{cd} no horário nos últimos 13 meses")}</section>
+<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria=f"Percentual de voos {co}-{cd} no horário mês a mês")}</section>
 {rel_html}
 {aviso_direitos()}
 {faq}"""
@@ -1011,7 +1030,7 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
     a = Acc()
     for _, x in legs:
         a.soma(x)
-    rot, val = serie_13(B, B.voo, k)
+    rot, val, pers = serie_13(B, B.voo, k)
     lin_l = []
     for (o, d), x in legs:
         hora = B.voo_hora[(c, n, o, d)].most_common(1)[0][0] if B.voo_hora[(c, n, o, d)] else ""
@@ -1055,7 +1074,7 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 <section class="card"><h2>Quanto ele atrasa</h2>{dist_html}<p class="nota">Atraso na chegada das {nf(a.med)} viagens realizadas nos últimos 3 meses.</p></section>
 <section class="card"><div class="card-head"><h2>Outros voos {esc(B.cod(o))} → {esc(B.cod(d))}</h2><span class="small">Do mais ao menos pontual</span></div><div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Companhia</th><th scope="col">Saída</th><th scope="col" class="r">No horário</th></tr></thead><tbody>{lin_o}</tbody></table></div></section>
 </div>
-<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, aria=f"Percentual de viagens do voo {cod} no horário nos últimos 13 meses")}</section>
+<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria=f"Percentual de viagens do voo {cod} no horário mês a mês")}</section>
 {aviso_direitos()}
 {faq}"""
     return pagina(B, f"/voos/{B.voo_slug(c, n)}/", f"Voo {cod} ({cia}) {trecho}: atrasos e cancelamentos | Voo em Números",
@@ -1113,7 +1132,7 @@ def pg_fim(B: Base, fim, aero_pag) -> str:
     rots = [f"{d.day:02d}/{d.month:02d}" for d in fim["dias"]]
     validos = [v for v in vals if v is not None]
     corte = sorted(validos)[2] if len(validos) > 3 else 0
-    cores = ["#C2410C" if v is not None and v <= corte else "#5B3FC4" for v in vals]
+    cores = ["#C2410C" if v is not None and v <= corte else "#2A9DE0" for v in vals]
     graf = svg_barras(rots, vals, destaque_ultimo=False, altura=210, cores=cores,
                       aria=f"Pontualidade diária dos voos domésticos de 19/12/{ano} a 04/01/{ano + 1}")
     piores = sorted([(k, v) for k, v in zip(fim["dias"], vals) if v is not None], key=lambda t: t[1])[:3]
@@ -1526,6 +1545,7 @@ class Demanda:
             self.cia[m], self.aero[m], self.rota[m] = C, A, R
         ms = sorted(m for m in self.mensal if m <= self.ref)
         self.u13 = ms[-13:]
+        self.todos = ms
 
 
 def abrevia(v: float) -> str:
@@ -1612,23 +1632,25 @@ def forca(r: float) -> str:
     return "muito fraca" if a < 0.2 else "fraca" if a < 0.4 else "moderada" if a < 0.6 else "forte" if a < 0.8 else "muito forte"
 
 
-def svg_barras_valor(rotulos, valores, fmt, aria="", altura=190, largura=720) -> str:
+def svg_barras_valor(rotulos, valores, fmt, aria="", altura=190, largura=720, periodos=None) -> str:
     n = len(valores)
     W, H, top, base = largura, altura, 22, altura - 26
     mx = max(valores) if valores else 1
     passo = (W - 20) / n
     bw = min(46, passo * 0.66)
     out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{esc(aria)}">',
-           f'<line x1="10" y1="{base}" x2="{W - 10}" y2="{base}" stroke="#C9C6D6"/>']
+           f'<line x1="10" y1="{base}" x2="{W - 10}" y2="{base}" stroke="#C6D2DC"/>']
     for i, (r, v) in enumerate(zip(rotulos, valores)):
         x = 10 + i * passo + (passo - bw) / 2
         h = max(2, v / mx * (base - top))
         ult = i == n - 1
-        out.append(f'<rect x="{x:.1f}" y="{base - h:.1f}" width="{bw:.1f}" height="{h:.1f}" rx="3" fill="{"#5B3FC4" if ult else "#B9AEE8"}"/>')
+        out.append(f'<rect x="{x:.1f}" y="{base - h:.1f}" width="{bw:.1f}" height="{h:.1f}" rx="3" fill="{"#2A9DE0" if ult else "#A9D8F5"}"/>')
         out.append(f'<text x="{x + bw / 2:.1f}" y="{base - h - 6:.1f}" text-anchor="middle" font-size="12" fill="#3D424A" font-weight="{700 if ult else 400}">{esc(fmt(v))}</text>')
         out.append(f'<text x="{x + bw / 2:.1f}" y="{H - 8}" text-anchor="middle" font-size="12" fill="#5A6070">{esc(r)}</text>')
     out.append("</svg>")
-    return '<div class="chart">' + "".join(out) + "</div>"
+    cfg = {"t": "b", "p": list(periodos or rotulos), "d": 1, "suf": " mi", "u": "milhões", "vl": 1, "vd": 1,
+           "s": [{"n": "Passageiros", "v": [round(v / 1e6, 3) for v in valores], "c": "#2A9DE0"}]}
+    return fam_gr(cfg, '<div class="chart">' + "".join(out) + "</div>", aria)
 
 
 def svg_dispersao(B, pts) -> str:
@@ -1645,12 +1667,12 @@ def svg_dispersao(B, pts) -> str:
     out = [f'<svg class="disp" viewBox="0 0 {W} {H}" role="img" aria-label="Gráfico de dispersão: passageiros embarcados e pontualidade de cada aeroporto em {mes_nome(B.dem.ref)}">']
     y = y0
     while y <= y1 + 1e-9:
-        out.append(f'<line x1="{ml}" y1="{py(y):.1f}" x2="{W - mr}" y2="{py(y):.1f}" stroke="#EFEEF4"/>'
+        out.append(f'<line x1="{ml}" y1="{py(y):.1f}" x2="{W - mr}" y2="{py(y):.1f}" stroke="#EAEFF3"/>'
                    f'<text x="{ml - 8}" y="{py(y) + 4:.1f}" text-anchor="end" font-size="12" fill="#5A6070">{pc(y, 0)}</text>')
         y += 0.05
     for e, rot in ((3, "1 mil"), (4, "10 mil"), (5, "100 mil"), (6, "1 milhão")):
         if x0 <= e <= x1:
-            out.append(f'<line x1="{px(e):.1f}" y1="{mt}" x2="{px(e):.1f}" y2="{H - mb}" stroke="#EFEEF4"/>'
+            out.append(f'<line x1="{px(e):.1f}" y1="{mt}" x2="{px(e):.1f}" y2="{H - mb}" stroke="#EAEFF3"/>'
                        f'<text x="{px(e):.1f}" y="{H - mb + 18}" text-anchor="middle" font-size="12" fill="#5A6070">{rot}</text>')
     out.append(f'<text x="{(ml + W - mr) / 2:.0f}" y="{H - 6}" text-anchor="middle" font-size="12" fill="#3D424A">Passageiros embarcados no mês (escala logarítmica)</text>')
     n = len(xs); mx, my = sum(xs) / n, sum(ys) / n
@@ -1658,12 +1680,12 @@ def svg_dispersao(B, pts) -> str:
     if sxx:
         b = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx
         a = my - b * mx
-        out.append(f'<line x1="{px(x0):.1f}" y1="{py(a + b * x0):.1f}" x2="{px(x1):.1f}" y2="{py(a + b * x1):.1f}" stroke="#5B3FC4" stroke-width="1.5" stroke-dasharray="5 4"/>')
+        out.append(f'<line x1="{px(x0):.1f}" y1="{py(a + b * x0):.1f}" x2="{px(x1):.1f}" y2="{py(a + b * x1):.1f}" stroke="#2A9DE0" stroke-width="1.5" stroke-dasharray="5 4"/>')
     rotulados = {p[0] for p in sorted(pts, key=lambda t: -t[1])[:8]} | {max(pts, key=lambda t: t[2])[0], min(pts, key=lambda t: t[2])[0]}
     for o, pax, pp in pts:
         cx, cy = px(math.log10(pax)), py(pp)
         nome = f"{B.cod(o)} · {B.aero_nome(o)}: {nf(pax)} passageiros, {pc(pp)} no horário"
-        circ = f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="5" fill="#5B3FC4" fill-opacity=".72" stroke="#fff" stroke-width="1"><title>{esc(nome)}</title></circle>'
+        circ = f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="5" fill="#2A9DE0" fill-opacity=".72" stroke="#fff" stroke-width="1"><title>{esc(nome)}</title></circle>'
         out.append(f'<a href="/aeroportos/{B.aero_slug(o)}/">{circ}</a>')
         if o in rotulados:
             out.append(f'<text class="rt" x="{cx + 7:.1f}" y="{cy + 4:.1f}" font-size="11" font-weight="600" fill="#14161A">{esc(B.cod(o))}</text>')
@@ -1677,10 +1699,10 @@ def pg_demanda(B: Base, aero_pag, rota_pag) -> str:
     mes = mes_nome(D.ref)
     T, T0 = D.mensal[D.ref], D.mensal.get(D.ant)
     # evolução
-    rot = [mes_curto(m) for m in D.u13]
-    graf_pax = svg_barras_valor(rot, [D.mensal[m].pax for m in D.u13], lambda v: nf(v / 1e6, 1),
-                                aria="Passageiros pagos, em milhões, nos últimos 13 meses")
-    graf_oc = svg_barras(rot, [D.mensal[m].ocup for m in D.u13], aria="Ocupação dos voos nos últimos 13 meses")
+    rot = [mes_curto(m) for m in D.todos]
+    graf_pax = svg_barras_valor(rot, [D.mensal[m].pax for m in D.todos], lambda v: nf(v / 1e6, 1), periodos=D.todos,
+                                aria="Passageiros pagos, em milhões, mês a mês")
+    graf_oc = svg_barras(rot, [D.mensal[m].ocup for m in D.todos], periodos=D.todos, aria="Ocupação dos voos mês a mês")
     # companhias
     cs = sorted(((c, x) for c, x in D.cia[D.ref].items() if x.pax >= 20000), key=lambda t: -t[1].pax)
     lin_c = "".join(f'<tr><td>{B.link_cia(c)}</td><td class="r num">{abrevia(x.pax)}</td><td class="r num">{pc(x.pax / T.pax)}</td>'
@@ -1830,7 +1852,8 @@ def gerar_imagens(B: Base):
         d.text((x, 200), rot, font=f(False, 28), fill=MUT)
         d.text((x, 238), val, font=f(True, 58), fill=INK)
         x += 370
-    rot, val = serie_13(B, B.tot, None)
+    rot, val, pers = serie_13(B, B.tot, None)
+    rot, val = rot[-13:], val[-13:]
     topo, base = 360, H - 70
     vals = [v for v in val if v is not None]
     mn = max(0, min(vals) - 0.1)
@@ -1858,6 +1881,145 @@ def gerar_imagens(B: Base):
         return ic
     icone(180).save(SAIDA / "assets" / "apple-touch-icon.png")
     icone(64).save(SAIDA / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48), (64, 64)])
+
+
+
+# ---------------------------------------------------------------- resumo do mês
+# Todo mês, quando a ANAC publica os dados, sai um resumo com manchete, o que mudou e o ranking.
+# Como o site guarda todos os meses, os resumos dos meses antigos são refeitos a partir dos mesmos dados.
+def mes_anterior(m: str) -> str:
+    a, mm = int(m[:4]), int(m[5:]) - 1
+    return f"{a - 1}-12" if mm == 0 else f"{a}-{mm:02d}"
+
+
+def nome_mes(m: str) -> str:
+    return MESES[int(m[5:]) - 1]
+
+
+def resumo_dados(B: Base, m: str) -> dict:
+    T = B.tot[m]
+    ant = mes_anterior(m)
+    janela = [x for x in B.lista if x <= m][-12:]
+    return {
+        "m": m, "ant": ant, "T": T, "T1": B.tot.get(ant), "T12": B.tot.get(mes_ant_ano(m)), "janela": janela,
+        "pontos": [B.tot[x].p_pont for x in janela if B.tot[x].p_pont is not None],
+        "cias": sorted(((c, a) for c, a in B.cia[m].items() if a.prev >= MIN_CIA_RANK and a.p_pont is not None), key=lambda t: -t[1].p_pont),
+        "aeros": sorted(((o, a) for o, a in B.aero[m].items() if a.prev >= MIN_AERO_RANK and a.p_pont is not None), key=lambda t: -t[1].p_pont),
+        "rotas": sorted(((r, a) for r, a in B.rota[m].items() if a.prev >= MIN_ROTA_RANK and a.p_pont is not None), key=lambda t: t[1].p_pont),
+    }
+
+
+def resumo_manchete(d: dict) -> str:
+    m, T, T1 = d["m"], d["T"], d["T1"]
+    mes, pont, pts = nome_mes(m), pc(T.p_pont), d["pontos"]
+    if len(pts) >= 12 and T.p_pont == max(pts):
+        return f"Melhor pontualidade em 12 meses: {pont} dos voos chegaram no horário em {mes}"
+    if len(pts) >= 12 and T.p_pont == min(pts):
+        return f"Pior pontualidade em 12 meses: só {pont} dos voos chegaram no horário em {mes}"
+    if T1 and T1.p_pont is not None:
+        dif = 100 * (T.p_pont - T1.p_pont)
+        if abs(dif) >= 0.1:
+            return f"{pont} dos voos chegaram no horário em {mes}, {'alta' if dif > 0 else 'queda'} de {nf(abs(dif), 1)} p.p. sobre {nome_mes(d['ant'])}"
+    return f"{pont} dos voos chegaram no horário em {mes}"
+
+
+def resumo_destaques(B: Base, d: dict) -> list:
+    T, T1, out = d["T"], d["T1"], []
+    cs, ae, ro = d["cias"], d["aeros"], d["rotas"]
+    if len(cs) >= 2:
+        (c1, a1), (c2, a2) = cs[0], cs[-1]
+        out.append(f"<b>Companhia mais pontual:</b> {B.link_cia(c1)}, com {pc(a1.p_pont)} dos voos no horário. "
+                   f"A menos pontual foi {B.link_cia(c2)}, com {pc(a2.p_pont)}.")
+    if len(ae) >= 2:
+        (o1, a1), (o2, a2) = ae[0], ae[-1]
+        out.append(f"<b>Aeroporto mais pontual:</b> {B.link_aero(o1, esc(B.cod(o1)))} ({esc(B.cidade(o1))}), {pc(a1.p_pont)} das partidas no horário. "
+                   f"O menos pontual foi {B.link_aero(o2, esc(B.cod(o2)))} ({esc(B.cidade(o2))}), com {pc(a2.p_pont)}.")
+    if ro:
+        (o, dd), a = ro[0]
+        out.append(f"<b>Rota que mais atrasou:</b> {B.link_rota(o, dd, esc(B.cod(o)) + ' → ' + esc(B.cod(dd)))} "
+                   f"({esc(B.cidade(o))} → {esc(B.cidade(dd))}), com só {pc(a.p_pont)} dos voos no horário.")
+    canc = f"<b>Cancelamentos:</b> {pc(T.p_canc)} dos voos previstos ({nf(T.canc)} voos)"
+    if T1 and T1.p_canc is not None:
+        dif = 100 * (T.p_canc - T1.p_canc)
+        canc += f", {'mais' if dif > 0 else 'menos'} {nf(abs(dif), 1)} p.p. que em {nome_mes(d['ant'])}" if abs(dif) >= 0.05 else f", igual a {nome_mes(d['ant'])}"
+    out.append(canc + ".")
+    if T.media_atr is not None:
+        out.append(f"<b>Atraso médio:</b> {min_txt(T.media_atr)} entre os voos que passaram de 30 minutos.")
+    return out
+
+
+def resumo_post(B: Base, d: dict, manchete: str) -> str:
+    m, T, cs, ae = d["m"], d["T"], d["cias"], d["aeros"]
+    l = [f"Pontualidade dos voos no Brasil, {mes_nome(m)}", "", manchete + ".", "",
+         f"No horário: {pc(T.p_pont)} · Cancelados: {pc(T.p_canc)} · Atraso médio: {min_txt(T.media_atr)}"]
+    if len(cs) >= 2:
+        l.append(f"Companhia mais pontual: {B.cia_nome(cs[0][0])} ({pc(cs[0][1].p_pont)}). Menos pontual: {B.cia_nome(cs[-1][0])} ({pc(cs[-1][1].p_pont)}).")
+    if len(ae) >= 2:
+        l.append(f"Aeroporto mais pontual: {B.cod(ae[0][0])} ({pc(ae[0][1].p_pont)}). Menos pontual: {B.cod(ae[-1][0])} ({pc(ae[-1][1].p_pont)}).")
+    l += ["", "Ranking completo de companhias, aeroportos e rotas:", f"{BASE}/resumo/{m}/", "", "#aviacao #voos #pontualidade #ANAC"]
+    return "\n".join(l)
+
+
+def pg_resumo(B: Base, m: str) -> str:
+    d = resumo_dados(B, m)
+    T, T12, mes = d["T"], d["T12"], mes_nome(m)
+    manchete = resumo_manchete(d)
+    post = resumo_post(B, d, manchete)
+    lead = (f"Em {mes}, <strong>{pc(T.p_pont)}</strong> dos voos domésticos chegaram no horário e <strong>{pc(T.p_canc)}</strong> foram cancelados. "
+            f"Foram {nf(T.prev)} voos previstos.")
+    linhas = "".join(
+        f'<tr><td><a href="/companhias/{B.cia_slug(c)}/">{esc(B.cia_nome(c))}</a></td><td style="min-width:200px">{meter(a.p_pont)}</td>'
+        f'<td class="r num">{pc(a.p_canc)}</td><td class="r num">{min_txt(a.media_atr)}</td><td class="r num">{nf(a.prev)}</td></tr>'
+        if c in B.pag_cias else
+        f'<tr><td>{esc(B.cia_nome(c))}</td><td style="min-width:200px">{meter(a.p_pont)}</td>'
+        f'<td class="r num">{pc(a.p_canc)}</td><td class="r num">{min_txt(a.media_atr)}</td><td class="r num">{nf(a.prev)}</td></tr>'
+        for c, a in d["cias"])
+    tab = ('<div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th>'
+           f'<th scope="col" class="r">Atraso médio dos atrasados</th><th scope="col" class="r">Voos previstos</th></tr></thead><tbody>{linhas}</tbody></table></div>')
+    meses13 = [x for x in B.lista if x <= m]
+    graf = svg_barras([mes_curto(x) for x in meses13], [B.tot[x].p_pont if B.tot[x].med >= 10 else None for x in meses13],
+                      periodos=meses13, aria=f"Percentual de voos domésticos no horário mês a mês até {mes}")
+    itens = "".join(f"<li>{x}</li>" for x in resumo_destaques(B, d))
+    corpo = f"""
+<section class="hero">
+<span class="kicker">Resumo do mês · {mes}</span>
+<h1>{esc(manchete)}</h1>
+<p class="lead">{lead}</p>
+</section>
+{tiles_acc(T, T12)}
+<section class="card"><h2>O que mudou em {nome_mes(m)}</h2><ul class="destaques">{itens}</ul></section>
+<section class="card"><div class="card-head"><h2>Ranking das companhias</h2><span class="small">Companhias com mais de {nf(MIN_CIA_RANK)} voos no mês</span></div>{tab}
+<p class="nota">No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Fonte: ANAC, Voo Regular Ativo.</p></section>
+<section class="card"><h2>Pontualidade mês a mês</h2>{graf}</section>
+<section class="card"><h2>Compartilhe este resumo</h2><p class="small">Texto pronto para WhatsApp, LinkedIn ou e-mail.</p>
+<textarea id="post" class="fam-post" readonly rows="11">{esc(post)}</textarea>
+<div><button type="button" class="fam-btn" data-copiar="post"><span>Copiar texto</span></button> <span class="small" data-copiar-msg aria-live="polite"></span></div></section>
+"""
+    desc = (f"{cap(mes)}: {pc(T.p_pont)} dos voos domésticos no horário, {pc(T.p_canc)} cancelados. "
+            "O que mudou, companhias, aeroportos e rotas, com dados oficiais da ANAC.")
+    ld = {"@context": "https://schema.org", "@type": "Article", "headline": manchete, "inLanguage": "pt-BR",
+          "datePublished": B.gerado.strftime("%Y-%m-%d"), "author": {"@type": "Organization", "name": "Voo em Números", "url": BASE + "/"},
+          "mainEntityOfPage": f"{BASE}/resumo/{m}/"}
+    return pagina(B, f"/resumo/{m}/", f"{manchete} | Voo em Números", desc, corpo, "/resumo/",
+                  migalhas=[("/resumo/", "Resumos mensais"), (None, cap(mes))], jsonld=[ld])
+
+
+def pg_resumos(B: Base) -> str:
+    itens = "".join(
+        f'<li><a href="/resumo/{m}/"><b>{cap(mes_nome(m))}</b><span>{esc(resumo_manchete(resumo_dados(B, m)))}</span></a></li>'
+        for m in reversed(B.lista))
+    corpo = (f'<section class="hero"><span class="kicker">Resumos mensais</span><h1>A pontualidade dos voos mês a mês</h1>'
+             f'<p class="lead">Todo mês, quando a ANAC publica os dados, sai aqui um resumo com a manchete, o que mudou e o ranking de companhias, '
+             f'aeroportos e rotas.</p></section><section class="card"><ul class="lista-resumos">{itens}</ul></section>')
+    return pagina(B, "/resumo/", "Resumos mensais da pontualidade dos voos | Voo em Números",
+                  "Resumo mensal da pontualidade e dos cancelamentos dos voos domésticos no Brasil, com dados da ANAC.", corpo, "/resumo/",
+                  migalhas=[(None, "Resumos mensais")])
+
+
+def resumo_card_home(B: Base) -> str:
+    d = resumo_dados(B, B.ref)
+    return (f'<section class="card aviso"><div><span class="kicker">Resumo de {nome_mes(B.ref)}</span>'
+            f'<h2>{esc(resumo_manchete(d))}</h2></div><a class="btn" href="/resumo/{B.ref}/">Ler o resumo</a></section>')
 
 
 # ---------------------------------------------------------------- principal
@@ -1911,7 +2073,7 @@ def main() -> int:
     cias_pag.sort(key=lambda c: -B.soma(B.cia, c, B.u12).prev)
     fim = periodo_fim(B)
     # páginas fixas que existem (o bloco "Continue explorando" só liga a páginas existentes)
-    B.fixas = {"/", "/companhias/", "/aeroportos/", "/rotas/", "/direitos/", "/mapa/"}
+    B.fixas = {"/", "/companhias/", "/aeroportos/", "/rotas/", "/direitos/", "/mapa/", "/resumo/"}
     if fim:
         B.fixas.add("/fim-de-ano/")
     if B.dem:
@@ -1937,6 +2099,9 @@ def main() -> int:
         pub(f"/voos/{B.voo_slug(*k)}/", pg_voo(B, k, voo_pag[k], voo_pag), "0.5")
     if fim:
         pub("/fim-de-ano/", pg_fim(B, fim, aero_pag), "0.9")
+    pub("/resumo/", pg_resumos(B), "0.8")
+    for m in B.lista:
+        pub(f"/resumo/{m}/", pg_resumo(B, m), "0.7" if m != B.ref else "0.9")
     pub("/direitos/", pg_direitos(B), "0.9")
     pub("/mapa/", pg_mapa(B, aero_pag), "0.8")
     if B.dem:
@@ -1969,8 +2134,10 @@ def main() -> int:
     # arquivos fixos
     shutil.copy(SITE / "estilo.css", SAIDA / "assets" / "estilo.css")
     shutil.copy(SITE / "app.js", SAIDA / "assets" / "app.js")
+    shutil.copy(SITE / "familia.js", SAIDA / "assets" / "familia.js")
+    shutil.copy(SITE / "familia-graficos.js", SAIDA / "assets" / "familia-graficos.js")
     (SAIDA / "favicon.svg").write_text(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30"><rect x="1" y="1" width="28" height="28" rx="7" fill="#5B3FC4"/>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>',
         encoding="utf-8")
     gerar_imagens(B)
