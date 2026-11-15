@@ -525,6 +525,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <script src="/assets/app.js?v={v}" defer></script>
 <script src="/assets/familia.js?v={v}" defer></script>
 <script src="/assets/familia-graficos.js?v={v}" defer></script>
+<script src="/assets/familia-compartilhar.js?v={v}" defer></script>
 {GOAT}
 </body>
 </html>
@@ -2136,6 +2137,7 @@ def main() -> int:
     shutil.copy(SITE / "app.js", SAIDA / "assets" / "app.js")
     shutil.copy(SITE / "familia.js", SAIDA / "assets" / "familia.js")
     shutil.copy(SITE / "familia-graficos.js", SAIDA / "assets" / "familia-graficos.js")
+    shutil.copy(SITE / "familia-compartilhar.js", SAIDA / "assets" / "familia-compartilhar.js")
     (SAIDA / "favicon.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>',
