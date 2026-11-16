@@ -78,6 +78,9 @@ jobs:
             git push
           fi
 
+      - name: IndexNow, o que mudou nesta publicação
+        run: python scripts/indexnow.py preparar docs https://vooemnumeros.com.br 260b8d55d9f4015cf31cb76a463ba076
+
       - name: Empacotar site
         if: always()
         uses: actions/upload-pages-artifact@v3
@@ -88,6 +91,10 @@ jobs:
         id: publicar
         if: always()
         uses: actions/deploy-pages@v4
+
+      - name: IndexNow, avisar o Bing das páginas que mudaram
+        continue-on-error: true
+        run: python scripts/indexnow.py enviar docs https://vooemnumeros.com.br 260b8d55d9f4015cf31cb76a463ba076
 
       - name: Falhar se o robô falhou
         if: steps.robo.outcome == 'failure'

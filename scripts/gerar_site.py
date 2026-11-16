@@ -526,6 +526,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <script src="/assets/familia.js?v={v}" defer></script>
 <script src="/assets/familia-graficos.js?v={v}" defer></script>
 <script src="/assets/familia-compartilhar.js?v={v}" defer></script>
+<script src="/assets/familia-busca.js?v={v}" data-indice="/busca-geral.json?v={v}" data-dica="Voo (LA 3300), rota (GRU SSA), cidade ou aeroporto" defer></script>
 {GOAT}
 </body>
 </html>
@@ -2125,6 +2126,10 @@ def main() -> int:
     for k in sorted(voo_pag, key=lambda k: -sum(x.prev for x in B.voo_legs[k].values())):
         idx.append([f"{B.cod_voo(*k)} {voo_pag[k]}", B.cia_nome(k[0]), f"/voos/{B.voo_slug(*k)}/"])
     (SAIDA / "busca.json").write_text(json.dumps(idx, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    # busca do cabeçalho (familia-busca.js): mesmo conteúdo, na ordem [título, endereço, tipo]
+    geral = [["Companhias aéreas: pontualidade e cancelamentos", "/companhias/", "página"], ["Aeroportos do Brasil", "/aeroportos/", "página"], ["Rotas mais voadas", "/rotas/", "página"]]
+    geral += [[t, u, k] for t, k, u in idx]
+    (SAIDA / "busca-geral.json").write_text(json.dumps(geral, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     # índice de cidades com aeroporto, lido pelos outros portais da família para ligar cidade → aeroporto
     por_cidade = {}
     for a in sorted(aero_pag, key=lambda a: -B.soma(B.aero, a, B.u3).prev):
@@ -2138,6 +2143,7 @@ def main() -> int:
     shutil.copy(SITE / "familia.js", SAIDA / "assets" / "familia.js")
     shutil.copy(SITE / "familia-graficos.js", SAIDA / "assets" / "familia-graficos.js")
     shutil.copy(SITE / "familia-compartilhar.js", SAIDA / "assets" / "familia-compartilhar.js")
+    shutil.copy(SITE / "familia-busca.js", SAIDA / "assets" / "familia-busca.js")
     (SAIDA / "favicon.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>',
