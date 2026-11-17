@@ -1898,26 +1898,82 @@ def nome_mes(m: str) -> str:
     return MESES[int(m[5:]) - 1]
 
 
+MIN_EXTREMO = 6      # "melhor/pior em N meses" só aparece quando N chega a isso
+MIN_JANELA = 12      # recorde desde o início da série só vale com pelo menos um ano de histórico
+LIMITE_X = 280       # caracteres do post no X
+PESO_LINK_X = 23     # o X conta qualquer link como 23 caracteres
+
+
+def _extremo(valores: list, idx: int):
+    """Diz se o valor de `idx` é o maior ou o menor em N meses: {'tipo', 'n', 'janela'} ou None.
+    N é quantos meses para trás ele se sustenta como o mais alto (ou o mais baixo); se nenhum mês da série o supera,
+    N é o tamanho da série ('janela': True)."""
+    v = valores[idx]
+    if v is None:
+        return None
+    melhor = None
+    for tipo, bate in (("maior", lambda x: x >= v), ("menor", lambda x: x <= v)):
+        j = next((k for k in range(idx - 1, -1, -1) if valores[k] is not None and bate(valores[k])), None)
+        if j is None:
+            n, janela = idx + 1, True
+            if n < MIN_JANELA:
+                continue
+        else:
+            n, janela = idx - j, False
+            if n < MIN_EXTREMO:
+                continue
+        if melhor is None or n > melhor["n"]:
+            melhor = {"tipo": tipo, "n": n, "janela": janela}
+    return melhor
+
+
+def pp_txt(dif: float, casas: int = 1) -> str:
+    """Diferença em pontos percentuais: 1.04 -> '+1,0 p.p.'."""
+    return ("+" if dif > 0 else "−" if dif < 0 else "") + nf(abs(dif), casas) + " p.p."
+
+
+def _comp_pp(dif, ref: str):
+    if dif is None:
+        return None
+    if abs(dif) < 0.05:
+        return f"estável sobre {ref}"
+    return f"{'alta' if dif > 0 else 'queda'} de {nf(abs(dif), 1)} p.p. sobre {ref}"
+
+
 def resumo_dados(B: Base, m: str) -> dict:
     T = B.tot[m]
     ant = mes_anterior(m)
     janela = [x for x in B.lista if x <= m][-12:]
+    lista = [x for x in B.lista if x <= m]
+
+    def mov(tab, minimo):
+        """Quem tem medida nos dois meses (com voos suficientes): (chave, acc, acc do mês anterior, variação em p.p.), da maior alta à maior queda."""
+        out = []
+        for k, a in tab[m].items():
+            a1 = tab.get(ant, {}).get(k)
+            if a.prev >= minimo and a.p_pont is not None and a1 and a1.prev >= minimo and a1.p_pont is not None:
+                out.append((k, a, a1, 100 * (a.p_pont - a1.p_pont)))
+        return sorted(out, key=lambda t: -t[3])
+
     return {
         "m": m, "ant": ant, "T": T, "T1": B.tot.get(ant), "T12": B.tot.get(mes_ant_ano(m)), "janela": janela,
         "pontos": [B.tot[x].p_pont for x in janela if B.tot[x].p_pont is not None],
+        "extremo": _extremo([B.tot[x].p_pont if B.tot[x].med >= 10 else None for x in lista], len(lista) - 1),
+        "desde": lista[0],
         "cias": sorted(((c, a) for c, a in B.cia[m].items() if a.prev >= MIN_CIA_RANK and a.p_pont is not None), key=lambda t: -t[1].p_pont),
         "aeros": sorted(((o, a) for o, a in B.aero[m].items() if a.prev >= MIN_AERO_RANK and a.p_pont is not None), key=lambda t: -t[1].p_pont),
         "rotas": sorted(((r, a) for r, a in B.rota[m].items() if a.prev >= MIN_ROTA_RANK and a.p_pont is not None), key=lambda t: t[1].p_pont),
+        "cia_mov": mov(B.cia, MIN_CIA_RANK), "aero_mov": mov(B.aero, MIN_AERO_RANK),
     }
 
 
 def resumo_manchete(d: dict) -> str:
     m, T, T1 = d["m"], d["T"], d["T1"]
-    mes, pont, pts = nome_mes(m), pc(T.p_pont), d["pontos"]
-    if len(pts) >= 12 and T.p_pont == max(pts):
-        return f"Melhor pontualidade em 12 meses: {pont} dos voos chegaram no horário em {mes}"
-    if len(pts) >= 12 and T.p_pont == min(pts):
-        return f"Pior pontualidade em 12 meses: só {pont} dos voos chegaram no horário em {mes}"
+    mes, pont, e = nome_mes(m), pc(T.p_pont), d.get("extremo")
+    if e and e["tipo"] == "maior":
+        return f"Melhor pontualidade em {e['n']} meses: {pont} dos voos chegaram no horário em {mes}"
+    if e and e["tipo"] == "menor":
+        return f"Pior pontualidade em {e['n']} meses: só {pont} dos voos chegaram no horário em {mes}"
     if T1 and T1.p_pont is not None:
         dif = 100 * (T.p_pont - T1.p_pont)
         if abs(dif) >= 0.1:
@@ -1925,40 +1981,123 @@ def resumo_manchete(d: dict) -> str:
     return f"{pont} dos voos chegaram no horário em {mes}"
 
 
-def resumo_destaques(B: Base, d: dict) -> list:
-    T, T1, out = d["T"], d["T1"], []
-    cs, ae, ro = d["cias"], d["aeros"], d["rotas"]
-    if len(cs) >= 2:
-        (c1, a1), (c2, a2) = cs[0], cs[-1]
-        out.append(f"<b>Companhia mais pontual:</b> {B.link_cia(c1)}, com {pc(a1.p_pont)} dos voos no horário. "
-                   f"A menos pontual foi {B.link_cia(c2)}, com {pc(a2.p_pont)}.")
-    if len(ae) >= 2:
-        (o1, a1), (o2, a2) = ae[0], ae[-1]
-        out.append(f"<b>Aeroporto mais pontual:</b> {B.link_aero(o1, esc(B.cod(o1)))} ({esc(B.cidade(o1))}), {pc(a1.p_pont)} das partidas no horário. "
-                   f"O menos pontual foi {B.link_aero(o2, esc(B.cod(o2)))} ({esc(B.cidade(o2))}), com {pc(a2.p_pont)}.")
-    if ro:
-        (o, dd), a = ro[0]
-        out.append(f"<b>Rota que mais atrasou:</b> {B.link_rota(o, dd, esc(B.cod(o)) + ' → ' + esc(B.cod(dd)))} "
-                   f"({esc(B.cidade(o))} → {esc(B.cidade(dd))}), com só {pc(a.p_pont)} dos voos no horário.")
-    canc = f"<b>Cancelamentos:</b> {pc(T.p_canc)} dos voos previstos ({nf(T.canc)} voos)"
-    if T1 and T1.p_canc is not None:
-        dif = 100 * (T.p_canc - T1.p_canc)
-        canc += f", {'mais' if dif > 0 else 'menos'} {nf(abs(dif), 1)} p.p. que em {nome_mes(d['ant'])}" if abs(dif) >= 0.05 else f", igual a {nome_mes(d['ant'])}"
-    out.append(canc + ".")
-    if T.media_atr is not None:
-        out.append(f"<b>Atraso médio:</b> {min_txt(T.media_atr)} entre os voos que passaram de 30 minutos.")
+def resumo_abertura(d: dict) -> str:
+    """Parágrafo de abertura: pontualidade, variação sobre o mês anterior e sobre um ano antes, cancelamentos e recorde."""
+    T, T1, T12 = d["T"], d["T1"], d["T12"]
+    d1 = 100 * (T.p_pont - T1.p_pont) if T1 and T1.p_pont is not None else None
+    d12 = 100 * (T.p_pont - T12.p_pont) if T12 and T12.p_pont is not None else None
+
+    def sentido(x):
+        return None if x is None else "estável" if abs(x) < 0.05 else "alta" if x > 0 else "queda"
+    if d12 is not None and sentido(d12) == sentido(d1) and sentido(d12) != "estável":
+        partes = [_comp_pp(d1, nome_mes(d["ant"])), f"de {nf(abs(d12), 1)} p.p. sobre {mes_nome(mes_ant_ano(d['m']))}"]
+    else:
+        partes = [_comp_pp(d1, nome_mes(d["ant"])), _comp_pp(d12, mes_nome(mes_ant_ano(d["m"])))]
+    partes = [p for p in partes if p]
+    txt = f"Em {mes_nome(d['m'])}, {pc(T.p_pont)} dos voos domésticos chegaram no horário"
+    txt += f" ({' e '.join(partes)})" if partes else ""
+    txt += f" e {pc(T.p_canc)} foram cancelados. Foram {nf(T.prev)} voos previstos."
+    e = d.get("extremo")
+    if e:
+        txt += f" É a {'melhor' if e['tipo'] == 'maior' else 'pior'} pontualidade em {e['n']} meses" + \
+               (f", o período que o site cobre (desde {mes_nome(d['desde'])})." if e["janela"] else ".")
+    return txt
+
+
+def resumo_cias(B: Base, d: dict) -> list:
+    """2 ou 3 companhias em destaque: a de maior alta, a de maior queda e, para completar, a mais (ou a menos) pontual."""
+    mov, cs = d["cia_mov"], d["cias"]
+    escolhidas = []
+
+    def pega(c, a, dif, nota):
+        if all(c != x[0] for x in escolhidas):
+            escolhidas.append((c, a, dif, nota))
+    dif_de = {c: dif for c, _, _, dif in mov}
+    if mov and mov[0][3] > 0:
+        pega(mov[0][0], mov[0][1], mov[0][3], "maior alta entre as companhias")
+    if mov and mov[-1][3] < 0:
+        pega(mov[-1][0], mov[-1][1], mov[-1][3], "maior queda entre as companhias")
+    if cs:
+        pega(cs[0][0], cs[0][1], dif_de.get(cs[0][0]), "a mais pontual do mês")
+        if len(escolhidas) < 3 and len(cs) > 1:
+            pega(cs[-1][0], cs[-1][1], dif_de.get(cs[-1][0]), "a menos pontual do mês")
+    out = []
+    for c, a, dif, nota in escolhidas[:3]:
+        var = f", {pp_txt(dif)} sobre {nome_mes(d['ant'])}" if dif is not None else ""
+        resto = f"{pc(a.p_pont)} dos voos no horário{var} e {pc(a.p_canc)} cancelados; {nota}."
+        out.append({"nome": B.cia_nome(c), "texto": f"{B.cia_nome(c)}: {resto}", "html": f"{B.link_cia(c)}: {esc(resto)}"})
     return out
 
 
-def resumo_post(B: Base, d: dict, manchete: str) -> str:
-    m, T, cs, ae = d["m"], d["T"], d["cias"], d["aeros"]
-    l = [f"Pontualidade dos voos no Brasil, {mes_nome(m)}", "", manchete + ".", "",
-         f"No horário: {pc(T.p_pont)} · Cancelados: {pc(T.p_canc)} · Atraso médio: {min_txt(T.media_atr)}"]
+def resumo_insight(d: dict) -> str:
+    """Uma ou duas frases sobre o que explica o mês, pela primeira regra que se aplica."""
+    T, T1, achados = d["T"], d["T1"], []
+    mv = d["aero_mov"]
+    if len(mv) >= 10:
+        sobe, cai = sum(1 for t in mv if t[3] > 0.05), sum(1 for t in mv if t[3] < -0.05)
+        if sobe == len(mv):
+            achados.append(f"A pontualidade melhorou em todos os {len(mv)} aeroportos acompanhados.")
+        elif cai == len(mv):
+            achados.append(f"A pontualidade piorou em todos os {len(mv)} aeroportos acompanhados.")
+        else:
+            achados.append(f"A pontualidade melhorou em {sobe} dos {len(mv)} aeroportos acompanhados e piorou em {cai}.")
+    if T1 and T1.p_canc is not None and T.p_canc is not None:
+        dif = 100 * (T.p_canc - T1.p_canc)
+        if abs(dif) >= 0.3:
+            achados.append(f"Os cancelamentos {'subiram' if dif > 0 else 'caíram'} para {pc(T.p_canc)} dos voos previstos ({pp_txt(dif)}).")
+    cs = d["cias"]
     if len(cs) >= 2:
-        l.append(f"Companhia mais pontual: {B.cia_nome(cs[0][0])} ({pc(cs[0][1].p_pont)}). Menos pontual: {B.cia_nome(cs[-1][0])} ({pc(cs[-1][1].p_pont)}).")
-    if len(ae) >= 2:
-        l.append(f"Aeroporto mais pontual: {B.cod(ae[0][0])} ({pc(ae[0][1].p_pont)}). Menos pontual: {B.cod(ae[-1][0])} ({pc(ae[-1][1].p_pont)}).")
-    l += ["", "Ranking completo de companhias, aeroportos e rotas:", f"{BASE}/resumo/{m}/", "", "#aviacao #voos #pontualidade #ANAC"]
+        gap = 100 * (cs[0][1].p_pont - cs[-1][1].p_pont)
+        achados.append(f"Entre as companhias, a diferença entre a mais e a menos pontual foi de {nf(gap, 1)} p.p.")
+    return " ".join(achados[:2])
+
+
+def _linhas_aero(B: Base, lista: list) -> str:
+    return "".join(
+        f'<tr><td>{B.link_aero(o, esc(B.cod(o)))} <span class="small">{esc(B.cidade(o))}</span></td>'
+        f'<td class="r num">{pc(a.p_pont)}</td><td class="r num">{pp_txt(dif)}</td></tr>' for o, a, a1, dif in lista)
+
+
+def resumo_post_x(B: Base, d: dict, cias: list) -> str:
+    """Post curto para o X: cabe em 280 caracteres (o link conta 23). Tira os extras, do menos para o mais importante, até caber."""
+    m, T, url = d["m"], d["T"], f"{BASE}/resumo/{d['m']}/"
+    d1 = 100 * (T.p_pont - d["T1"].p_pont) if d["T1"] and d["T1"].p_pont is not None else None
+    cabeca = f"Pontualidade dos voos no Brasil em {mes_nome(m)}: {pc(T.p_pont)} chegaram no horário"
+    cabeca += f" ({pp_txt(d1)} no mês)" if d1 is not None else ""
+    cabeca += f" e {pc(T.p_canc)} foram cancelados."
+    e = d.get("extremo")
+    extremo = f"A {'melhor' if e['tipo'] == 'maior' else 'pior'} em {e['n']} meses." if e else ""
+    cs = d["cias"]
+    cia = f"Mais pontual: {B.cia_nome(cs[0][0])} ({pc(cs[0][1].p_pont)})." if cs else ""
+    tags = "#aviacao #voos #ANAC"
+    for usa in ((1, 1, 1), (1, 0, 1), (1, 1, 0), (1, 0, 0), (0, 0, 0)):
+        corpo = [cabeca] + ([extremo] if usa[0] and extremo else []) + ([cia] if usa[1] and cia else [])
+        texto = " ".join(corpo) + f"\n\n{url}" + (f"\n{tags}" if usa[2] else "")
+        if len(texto.replace(url, "x" * PESO_LINK_X)) <= LIMITE_X:
+            return texto
+    return f"{cabeca}\n\n{url}"
+
+
+def resumo_post(B: Base, d: dict, manchete: str, cias: list, insight: str) -> str:
+    """Versão maior, para o LinkedIn, o WhatsApp ou o e-mail."""
+    m, T = d["m"], d["T"]
+    l = [f"Pontualidade dos voos no Brasil, {mes_nome(m)}", "", resumo_abertura(d), ""]
+    up, down = [t for t in d["aero_mov"] if t[3] > 0][:3], [t for t in d["aero_mov"][::-1] if t[3] < 0][:3]
+    if up or down:
+        l.append("Entre os aeroportos:")
+        if up:
+            l.append("• Mais melhoraram: " + "; ".join(f"{B.cod(o)} ({pc(a.p_pont)}, {pp_txt(dif)})" for o, a, _, dif in up))
+        if down:
+            l.append("• Mais pioraram: " + "; ".join(f"{B.cod(o)} ({pc(a.p_pont)}, {pp_txt(dif)})" for o, a, _, dif in down))
+        l.append("")
+    if cias:
+        l.append("Companhias em destaque:")
+        l += [f"• {c['texto']}" for c in cias]
+        l.append("")
+    if insight:
+        l += [insight, ""]
+    l += ["Ranking completo de companhias, aeroportos e rotas:", f"{BASE}/resumo/{m}/", "",
+          "#aviacao #voos #pontualidade #ANAC", "Fonte: ANAC, Voo Regular Ativo, organizada pelo Voo em Números."]
     return "\n".join(l)
 
 
@@ -1966,9 +2105,8 @@ def pg_resumo(B: Base, m: str) -> str:
     d = resumo_dados(B, m)
     T, T12, mes = d["T"], d["T12"], mes_nome(m)
     manchete = resumo_manchete(d)
-    post = resumo_post(B, d, manchete)
-    lead = (f"Em {mes}, <strong>{pc(T.p_pont)}</strong> dos voos domésticos chegaram no horário e <strong>{pc(T.p_canc)}</strong> foram cancelados. "
-            f"Foram {nf(T.prev)} voos previstos.")
+    cias, insight = resumo_cias(B, d), resumo_insight(d)
+    post, post_x = resumo_post(B, d, manchete, cias, insight), resumo_post_x(B, d, cias)
     linhas = "".join(
         f'<tr><td><a href="/companhias/{B.cia_slug(c)}/">{esc(B.cia_nome(c))}</a></td><td style="min-width:200px">{meter(a.p_pont)}</td>'
         f'<td class="r num">{pc(a.p_canc)}</td><td class="r num">{min_txt(a.media_atr)}</td><td class="r num">{nf(a.prev)}</td></tr>'
@@ -1981,21 +2119,47 @@ def pg_resumo(B: Base, m: str) -> str:
     meses13 = [x for x in B.lista if x <= m]
     graf = svg_barras([mes_curto(x) for x in meses13], [B.tot[x].p_pont if B.tot[x].med >= 10 else None for x in meses13],
                       periodos=meses13, aria=f"Percentual de voos domésticos no horário mês a mês até {mes}")
-    itens = "".join(f"<li>{x}</li>" for x in resumo_destaques(B, d))
+    up, down = [t for t in d["aero_mov"] if t[3] > 0][:5], [t for t in d["aero_mov"][::-1] if t[3] < 0][:5]
+    cab_aero = ('<thead><tr><th scope="col">Aeroporto</th><th scope="col" class="r">No horário</th>'
+                f'<th scope="col" class="r">Variação sobre {nome_mes(d["ant"])}</th></tr></thead>')
+    aeros = ""
+    if up or down:
+        blocos = []
+        for tit, lista, vazio in (("Aeroportos que mais melhoraram", up, "Nenhum aeroporto melhorou neste mês."),
+                                  ("Aeroportos que mais pioraram", down, "Nenhum aeroporto piorou neste mês.")):
+            corpo_t = (f'<div class="tw"><table>{cab_aero}<tbody>{_linhas_aero(B, lista)}</tbody></table></div>' if lista else f'<p class="small">{vazio}</p>')
+            blocos.append(f'<div class="card"><h2>{tit}</h2><p class="small">Pontualidade na partida, em pontos percentuais; aeroportos com mais de {nf(MIN_AERO_RANK)} partidas no mês</p>{corpo_t}</div>')
+        aeros = f'<div class="grid2">{"".join(blocos)}</div>'
+    dest = ""
+    if cias:
+        dest = ('<section class="card"><h2>Companhias em destaque</h2><ul class="destaques">'
+                + "".join(f"<li>{c['html']}</li>" for c in cias) + "</ul></section>")
+    ins = f'<section class="card"><h2>Em resumo</h2><p>{esc(insight)}</p></section>' if insight else ""
+    liks = [("/companhias/", "Ranking de companhias"), ("/aeroportos/", "Ranking de aeroportos"), ("/rotas/", "Rotas"), ("/", "Visão geral da pontualidade")]
+    liks += [(f"/aeroportos/{B.aero_slug(o)}/", f"Aeroporto {B.cod(o)}") for o, a, a1, dif in (up[:1] + down[:1]) if o in B.pag_aero]
+    links_html = "".join(f'<li><a href="{h}">{esc(t)}</a></li>' for h, t in liks)
     corpo = f"""
 <section class="hero">
 <span class="kicker">Resumo do mês · {mes}</span>
 <h1>{esc(manchete)}</h1>
-<p class="lead">{lead}</p>
+<p class="lead">{esc(resumo_abertura(d))}</p>
 </section>
 {tiles_acc(T, T12)}
-<section class="card"><h2>O que mudou em {nome_mes(m)}</h2><ul class="destaques">{itens}</ul></section>
+{aeros}
+{dest}
+{ins}
 <section class="card"><div class="card-head"><h2>Ranking das companhias</h2><span class="small">Companhias com mais de {nf(MIN_CIA_RANK)} voos no mês</span></div>{tab}
 <p class="nota">No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Fonte: ANAC, Voo Regular Ativo.</p></section>
 <section class="card"><h2>Pontualidade mês a mês</h2>{graf}</section>
-<section class="card"><h2>Compartilhe este resumo</h2><p class="small">Texto pronto para WhatsApp, LinkedIn ou e-mail.</p>
-<textarea id="post" class="fam-post" readonly rows="11">{esc(post)}</textarea>
-<div><button type="button" class="fam-btn" data-copiar="post"><span>Copiar texto</span></button> <span class="small" data-copiar-msg aria-live="polite"></span></div></section>
+<section class="card"><h2>Para ir além</h2><ul class="links-resumo">{links_html}</ul></section>
+<section class="card"><details class="compartilhe"><summary><h2>Compartilhe este resumo</h2></summary>
+<p class="small">Textos prontos: uma versão curta, para o X, e uma maior, para o LinkedIn, o WhatsApp ou o e-mail.</p>
+<h3>Para o X</h3>
+<textarea id="post-x" class="fam-post" readonly rows="6">{esc(post_x)}</textarea>
+<div><button type="button" class="fam-btn" data-copiar="post-x"><span>Copiar texto do X</span></button> <span class="small" data-copiar-msg aria-live="polite"></span></div>
+<h3>Para o LinkedIn</h3>
+<textarea id="post" class="fam-post" readonly rows="14">{esc(post)}</textarea>
+<div><button type="button" class="fam-btn" data-copiar="post"><span>Copiar texto do LinkedIn</span></button> <span class="small" data-copiar-msg aria-live="polite"></span></div></details></section>
 """
     desc = (f"{cap(mes)}: {pc(T.p_pont)} dos voos domésticos no horário, {pc(T.p_canc)} cancelados. "
             "O que mudou, companhias, aeroportos e rotas, com dados oficiais da ANAC.")
