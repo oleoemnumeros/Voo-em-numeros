@@ -520,7 +520,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <footer><div>
 <span><strong>Voo em Números</strong> · versão beta</span>
 <span>Voos domésticos regulares de passageiros. No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Cancelados contam sobre os voos previstos.</span>
-<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/resumo/">Resumos</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a></span>
+<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/resumo/">Resumos</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a> · <a href="/contato/">Contato</a> · <a href="/privacidade/">Privacidade</a></span>
 </div>{familia_html()}</footer>
 <script src="/assets/app.js?v={v}" defer></script>
 <script src="/assets/familia.js?v={v}" defer></script>
@@ -1242,6 +1242,78 @@ def pg_sugestoes(B: Base) -> str:
     return pagina(B, "/sugestoes/", "Sugestões e críticas | Voo em Números",
                   "Envie uma sugestão, crítica ou correção para o Voo em Números. A mensagem chega por e-mail e é lida por uma pessoa.",
                   corpo, "/sugestoes/", migalhas=[("", "Sugestões e críticas")])
+
+
+# Páginas de privacidade e contato (exigidas para anúncios e boa prática de LGPD). O texto é o mesmo em toda a Família em Números.
+PRIVACIDADE_HTML = """<p class="lede">Esta página explica quais dados o __NOME__ coleta, por que coleta e quais são os seus direitos. Em resumo: não pedimos cadastro, não vendemos dados e não usamos cookies de rastreamento próprios.</p>
+<p class="small">Última atualização: 18 de novembro de 2026.</p>
+
+<h2>Quem somos</h2>
+<p>O __NOME__ faz parte da Família em Números, um grupo de portais independentes que organizam dados públicos do Brasil. Não temos ligação com órgãos do governo nem com as empresas citadas nos dados. Para qualquer assunto de privacidade, escreva para <a href="mailto:__EMAIL__">__EMAIL__</a>.</p>
+
+<h2>O que coletamos e para quê</h2>
+<ul>
+<li><strong>Estatísticas de visitas.</strong> Usamos o GoatCounter, um contador sem cookies que guarda dados agregados, como a página aberta, o site de origem, o tipo de aparelho e de navegador e o país. Ele não identifica quem visita. Serve para saber quais páginas são úteis.</li>
+<li><strong>Mensagens.</strong> Se você usar o formulário de <a href="__HREF_SUG__">Sugestões e críticas</a> ou escrever para o e-mail do portal, recebemos o que você escrever e, se informar, o seu nome e o seu e-mail. Usamos só para ler e responder. O formulário é entregue pelo serviço FormSubmit (formsubmit.co).</li>
+<li><strong>Dados técnicos de acesso.</strong> O site é hospedado no GitHub Pages, que, como qualquer servidor, pode registrar o endereço IP de quem acessa. As fontes de letra vêm do Google Fonts, que também recebe o endereço IP de quem abre a página.__MAPA__</li>
+</ul>
+
+<h2>Anúncios</h2>
+<p>Podemos exibir anúncios do Google AdSense para custear o projeto. Quando houver anúncios, o Google e os seus parceiros podem usar cookies e identificadores do navegador para mostrar anúncios com base nas suas visitas a este e a outros sites. Você pode gerenciar ou desativar a personalização em <a href="https://adssettings.google.com" rel="noopener" target="_blank">adssettings.google.com</a>, saber mais em <a href="https://policies.google.com/technologies/ads?hl=pt-BR" rel="noopener" target="_blank">como o Google usa dados de sites parceiros</a> e bloquear cookies nas configurações do seu navegador. Os anúncios não mudam os números mostrados nem a forma como os dados são organizados.</p>
+
+<h2>Cookies e armazenamento no navegador</h2>
+<p>O __NOME__ não define cookies de rastreamento. Para lembrar uma preferência, como o período escolhido nos gráficos, o site usa o armazenamento local do seu navegador. Essa informação fica no seu aparelho e não é enviada a nós. Se houver anúncios, os cookies serão os do Google, descritos acima.</p>
+
+<h2>O que publicamos</h2>
+<p>Os números vêm de bases públicas e aparecem de forma agregada (país, estado, município, empresa, campo, aeroporto ou rota, por exemplo). O site não pede nem publica dados pessoais de pessoas físicas.</p>
+
+<h2>Compartilhamento</h2>
+<p>Não vendemos nem alugamos dados. Os serviços citados acima (__SERV__) recebem apenas o que é necessário para funcionar.</p>
+
+<h2>Seus direitos</h2>
+<p>Pela Lei Geral de Proteção de Dados (Lei nº 13.709/2018), você pode pedir a confirmação de que tratamos dados seus, o acesso, a correção ou a eliminação deles, entre outros direitos. Escreva para <a href="mailto:__EMAIL__">__EMAIL__</a>. Guardamos as mensagens só pelo tempo necessário para responder e as apagamos quando você pedir.</p>
+
+<h2>Mudanças nesta página</h2>
+<p>Podemos atualizar este texto. A data da última atualização fica no topo. Dúvidas? Veja a página de <a href="__HREF_CONT__">contato</a>.</p>"""
+
+CONTATO_HTML = """<p class="lede">Encontrou um erro, tem uma sugestão ou quer falar com a gente? Escreva para <a href="mailto:__EMAIL__">__EMAIL__</a> ou use o <a href="__HREF_SUG__">formulário de sugestões e críticas</a>. Lemos todas as mensagens e respondemos quando você deixa um e-mail para retorno.</p>
+
+<h2>Sobre o que você pode escrever</h2>
+<ul>
+<li><strong>Erro em um dado ou página.</strong> Envie o endereço da página e o número que parece errado. Conferimos na fonte oficial e corrigimos.</li>
+<li><strong>Sugestões.</strong> Um dado que faz falta, uma página nova ou uma melhoria no site.</li>
+<li><strong>Imprensa e parcerias.</strong> Uso dos dados em reportagens, estudos e projetos. Os dados são públicos, mas gostamos de saber onde são usados.</li>
+<li><strong>Privacidade.</strong> Pedidos sobre dados pessoais, conforme a <a href="__HREF_PRIV__">política de privacidade</a>.</li>
+</ul>
+
+<h2>Importante</h2>
+<p>O __NOME__ é um projeto independente, sem ligação com órgãos do governo nem com as empresas citadas nos dados. __ESPECIFICO__</p>
+<p class="small">O __NOME__ faz parte da Família em Números, um grupo de portais que organizam dados públicos do Brasil.</p>"""
+
+_ESPECIFICO = 'Problema com o seu voo, bagagem ou reembolso? Fale com a companhia aérea e, se não resolver, registre a reclamação no <a href="https://www.consumidor.gov.br" rel="noopener" target="_blank">consumidor.gov.br</a> ou na ANAC. Veja também o <a href="/direitos/">guia de direitos do passageiro</a>.'
+
+
+def _texto_legal(modelo: str) -> str:
+    """Troca os marcadores do texto pelo nome do portal, e-mail e endereços das páginas."""
+    trocas = {"__NOME__": "Voo em Números", "__EMAIL__": FORM_EMAIL, "__SERV__": "GoatCounter, FormSubmit, GitHub e Google", "__MAPA__": "",
+              "__HREF_SUG__": "/sugestoes/", "__HREF_CONT__": "/contato/", "__HREF_PRIV__": "/privacidade/", "__ESPECIFICO__": _ESPECIFICO}
+    for k, v in trocas.items():
+        modelo = modelo.replace(k, v)
+    return modelo
+
+
+def pg_privacidade(B: Base) -> str:
+    corpo = "<section class=\"hero\"><h1>Política de privacidade</h1></section><section class=\"card prose\">" + _texto_legal(PRIVACIDADE_HTML) + "</section>"
+    return pagina(B, "/privacidade/", "Privacidade | Voo em Números",
+                  "Como o Voo em Números trata dados: o que coleta, anúncios do Google AdSense, cookies e seus direitos pela LGPD.",
+                  corpo, "/privacidade/", migalhas=[("", "Privacidade")])
+
+
+def pg_contato(B: Base) -> str:
+    corpo = "<section class=\"hero\"><h1>Contato</h1></section><section class=\"card prose\">" + _texto_legal(CONTATO_HTML) + "</section>"
+    return pagina(B, "/contato/", "Contato | Voo em Números",
+                  "Fale com o Voo em Números: e-mail, formulário de sugestões, erros em dados, imprensa e parcerias.",
+                  corpo, "/contato/", migalhas=[("", "Contato")])
 
 
 def pg_sobre(B: Base) -> str:
@@ -2274,6 +2346,8 @@ def main() -> int:
         pub("/demanda/", pg_demanda(B, aero_pag, rota_pag), "0.8")
     pub("/sobre/", pg_sobre(B), "0.3")
     pub("/sugestoes/", pg_sugestoes(B), "0.2")
+    pub("/contato/", pg_contato(B), "0.2")
+    pub("/privacidade/", pg_privacidade(B), "0.2")
     escreve("/404.html", pg_404(B))
 
     # busca
