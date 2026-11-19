@@ -43,9 +43,11 @@ def post(t, alvo, extra):
     return S.post(U, data=d, timeout=120)
 
 
+
+import io, zipfile
 r = S.get(U, timeout=60)
-mostra(r.text, "inicial")
 r2 = post(r.text, "ctl00$MainContent$listTema", {"ctl00$MainContent$listTema": "14"})
-mostra(r2.text, "depois de escolher tema 14")
-i = r2.text.find("listAno")
-print(re.sub(r"\s+", " ", r2.text[i - 200:i + 3500]))
+r3 = post(r2.text, "", {"ctl00$MainContent$listTema": "14", "ctl00$MainContent$listAno": "2026", "ctl00$MainContent$btnListaArquivos": "Buscar Arquivos"})
+mostra(r3.text, "lista 2026")
+i = r3.text.find("btnListaArquivos")
+print(re.sub(r"\s+", " ", r3.text[i:i + 5000]))
