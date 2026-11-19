@@ -448,8 +448,9 @@ def continue_padrao(caminho: str) -> list:
     return []
 
 
-NAV = [("/", "Início"), ("/companhias/", "Companhias"), ("/aeroportos/", "Aeroportos"), ("/rotas/", "Rotas"), ("/mapa/", "Mapa"), ("/demanda/", "Passageiros"),
-       ("/resumo/", "Resumos"), ("/fim-de-ano/", "Fim de ano"), ("/direitos/", "Seus direitos"), ("/sobre/", "Como funciona")]
+# Ordem padrão da Família em Números: Início, Resumos, temas do portal, lugares, guias, Como funciona
+NAV = [("/", "Início"), ("/resumo/", "Resumos"), ("/companhias/", "Companhias"), ("/rotas/", "Rotas"), ("/demanda/", "Passageiros"),
+       ("/aeroportos/", "Aeroportos"), ("/mapa/", "Mapa"), ("/direitos/", "Seus direitos"), ("/fim-de-ano/", "Fim de ano"), ("/sobre/", "Como funciona")]
 LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>')
 
