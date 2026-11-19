@@ -50,18 +50,42 @@ rr = post(r3.text, "", {"ctl00$MainContent$listTema": "14", "ctl00$MainContent$l
                         "ctl00$MainContent$btnBaixar": "Baixar Marcados"})
 print(rr.status_code, rr.headers.get("content-type"), rr.headers.get("content-disposition"), len(rr.content))
 dados = rr.content
-if dados[:2] == b"PK":
-    z = zipfile.ZipFile(io.BytesIO(dados))
-    print(z.namelist())
-    dados = z.read(z.namelist()[0])
-txt = dados.decode("latin-1")
+z = zipfile.ZipFile(io.BytesIO(dados))
+nome = [n for n in z.namelist() if n.startswith("202610")][0]
+raw = z.read(nome)
+print("membro", nome, len(raw), "bytes")
+txt = raw.decode("latin-1")
 linhas = txt.splitlines()
 print("linhas:", len(linhas))
-for l in linhas[:8]:
-    print(l[:300])
+for l in linhas[:6]:
+    print(l)
+from collections import Counter, defaultdict
+emp = Counter(); rotas = defaultdict(lambda: [0, 0.0]); tmin, tmax = 1e9, 0
 for l in linhas[1:]:
-    if "SBSV" in l and "SBGR" in l:
-        print("exemplo SSA-GRU:", l)
-        break
-n = sum(1 for l in linhas if "SBSV" in l.split(";")[:6] and "SBGR" in l.split(";")[:6])
-print("linhas SBSV x SBGR:", n)
+    a = l.split(";")
+    if len(a) < 7:
+        continue
+    try:
+        t = float(a[5].replace(",", ".")); q = int(a[6])
+    except ValueError:
+        continue
+    emp[a[2]] += q
+    rotas[(a[3], a[4])][0] += q
+    rotas[(a[3], a[4])][1] += t * q
+    tmin = min(tmin, t); tmax = max(tmax, t)
+print("empresas:", emp.most_common(12))
+print("rotas:", len(rotas), "assentos totais:", sum(v[0] for v in rotas.values()))
+tot = sum(v[1] for v in rotas.values()) / sum(v[0] for v in rotas.values())
+print("tarifa média nominal (ponderada):", round(tot, 2), "min", tmin, "max", tmax)
+for k in [("SBSV", "SBGR"), ("SBSV", "SBSP"), ("SBGR", "SBSV"), ("SBSP", "SBRJ"), ("SBSV", "SBRF")]:
+    v = rotas.get(k)
+    print(k, v and (v[0], round(v[1] / v[0], 2)))
+# distribuição SSA-GRU
+dist = Counter()
+for l in linhas[1:]:
+    a = l.split(";")
+    if len(a) >= 7 and a[3] == "SBSV" and a[4] == "SBGR":
+        dist[round(float(a[5].replace(",", ".")) / 100) * 100] += int(a[6])
+print("SSA→GRU por faixa de R$100:", sorted(dist.items()))
+r = requests.get("https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json&dataInicial=01/09/2025", timeout=60)
+print("IPCA BCB:", r.status_code, r.text[:600])
