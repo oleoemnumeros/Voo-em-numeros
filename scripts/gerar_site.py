@@ -2271,6 +2271,9 @@ def escreve(caminho: str, conteudo: str):
     p.write_text(conteudo, encoding="utf-8")
 
 
+LLMS_TXT = '# Voo em Números\n\n> Pontualidade, atrasos e cancelamentos dos voos domésticos regulares no Brasil, por companhia aérea, aeroporto, rota e número de voo, com base nos dados públicos da ANAC.\n\nConsidera atrasado o voo que chega mais de 30 minutos depois do horário previsto, o mesmo corte da ANAC. Cada página mostra percentual no horário, cancelamentos, atraso médio e ranking. Os números descrevem o passado e não garantem o desempenho de um voo específico.\n\n## Principais páginas\n- [Resumo do mês](__BASE__/resumo/): panorama dos voos domésticos\n- [Companhias aéreas](__BASE__/companhias/): pontualidade e cancelamentos por empresa\n- [Aeroportos](__BASE__/aeroportos/): atrasos e cancelamentos por aeroporto\n- [Rotas](__BASE__/rotas/): desempenho de cada ligação entre aeroportos\n- [Demanda](__BASE__/demanda/): passageiros, assentos e ocupação\n- [Mapa](__BASE__/mapa/): visão geográfica da malha\n- [Fim de ano](__BASE__/fim-de-ano/): o que esperar dos voos nas festas\n- [Direitos do passageiro](__BASE__/direitos/): o que fazer em caso de atraso ou cancelamento\n- [Como funciona](__BASE__/sobre/): fonte, método e limitações\n\n## Fonte e atualização\n- Voos: base Voo Regular Ativo (VRA), da ANAC, atualizada todo mês.\n- Passageiros e ocupação: base Dados Estatísticos do Transporte Aéreo, da ANAC, com cerca de dois meses de atraso.\n- Entram voos domésticos regulares de passageiros. Ficam de fora internacionais, só de carga e táxi aéreo.\n- A base não informa o motivo do atraso nem se o cancelamento foi avisado com antecedência.\n\n## Como citar\n- Cite o nome do portal e o link da página usada. Os dados são públicos e os links levam à fonte oficial.\n- Cada página mostra o período dos dados. Informe o período ao usar um número.\n- O portal é independente e não tem ligação com governo, empresas ou instituições financeiras.\n\n## Família em Números\nPortais independentes de dados públicos do Brasil: Óleo em Números (https://oleoemnumeros.com.br), Comex em Números (https://comexemnumeros.com.br), Voo em Números (https://vooemnumeros.com.br) e Economia em Números (https://economiaemnumeros.com.br).\n\n## Contato\n- Erros, sugestões e pedidos de dados: __BASE__/contato/\n'
+
+
 def main() -> int:
     B = Base(carrega())
     B.dem = Demanda(DEM_ARQ) if DEM_ARQ.exists() else None
@@ -2393,6 +2396,7 @@ def main() -> int:
     sm.append("</urlset>")
     (SAIDA / "sitemap.xml").write_text("\n".join(sm), encoding="utf-8")
     (SAIDA / "robots.txt").write_text(f"User-agent: *\nAllow: /\n\nSitemap: {BASE}/sitemap.xml\n", encoding="utf-8")
+    (SAIDA / "llms.txt").write_text(LLMS_TXT.replace("__BASE__", BASE), encoding="utf-8")
     (SAIDA / "CNAME").write_text(DOMINIO + "\n", encoding="utf-8")
     print(f"Site gerado: {len(urls)} páginas ({len(aero_pag)} aeroportos, {len(rota_pag)} rotas, {len(voo_pag)} voos, "
           f"{len(cias_pag)} companhias). Dados até {B.ref}.")
