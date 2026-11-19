@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt
 import html
 import json
+import math
 import os
 import re
 import shutil
@@ -442,6 +443,8 @@ def continue_padrao(caminho: str) -> list:
         return [aero, direitos, dem, eco]
     if caminho.startswith("/rotas/"):
         return [direitos, aero, mapa, eco]
+    if caminho.startswith("/precos/"):
+        return [direitos, aero, ("voo", "/rotas/", "Rotas mais e menos pontuais", "Qual trecho atrasa mais"), eco]
     if caminho.startswith("/aeroportos/"):
         return [("voo", "/rotas/", "Rotas mais e menos pontuais", "Qual trecho atrasa mais"), direitos, mapa, eco]
     if caminho.startswith(("/cidades/", "/estados/", "/trajetos/")):
@@ -458,7 +461,7 @@ def continue_padrao(caminho: str) -> list:
 
 
 # Ordem padrão da Família em Números: Início, Resumos, temas do portal, lugares, guias, Como funciona
-NAV = [("/", "Início"), ("/resumo/", "Resumos"), ("/rankings/", "Rankings"), ("/companhias/", "Companhias"), ("/rotas/", "Rotas"), ("/demanda/", "Passageiros"),
+NAV = [("/", "Início"), ("/resumo/", "Resumos"), ("/rankings/", "Rankings"), ("/companhias/", "Companhias"), ("/rotas/", "Rotas"), ("/precos/", "Preços"), ("/demanda/", "Passageiros"),
        ("/aeroportos/", "Aeroportos"), ("/cidades/", "Cidades"), ("/mapa/", "Mapa"), ("/direitos/", "Seus direitos"), ("/fim-de-ano/", "Fim de ano"), ("/sobre/", "Como funciona")]
 LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>')
@@ -530,11 +533,12 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <footer><div>
 <span><strong>Voo em Números</strong> · versão beta</span>
 <span>Voos domésticos regulares de passageiros. No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Cancelados contam sobre os voos previstos.</span>
-<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/cidades/">Cidades</a> · <a href="/rankings/">Rankings</a> · <a href="/rotas/">Rotas</a> · <a href="/mapa/">Mapa</a> · <a href="/resumo/">Resumos</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a> · <a href="/contato/">Contato</a> · <a href="/privacidade/">Privacidade</a></span>
+<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/cidades/">Cidades</a> · <a href="/rankings/">Rankings</a> · <a href="/rotas/">Rotas</a> · <a href="/precos/">Preços</a> · <a href="/mapa/">Mapa</a> · <a href="/resumo/">Resumos</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a> · <a href="/contato/">Contato</a> · <a href="/privacidade/">Privacidade</a></span>
 </div>{familia_html()}</footer>
 <script src="/assets/app.js?v={v}" defer></script>
 <script src="/assets/familia.js?v={v}" defer></script>
 <script src="/assets/familia-graficos.js?v={v}" defer></script>
+<script src="/assets/precos.js?v={v}" defer></script>
 <script src="/assets/familia-compartilhar.js?v={v}" defer></script>
 <script src="/assets/familia-busca.js?v={v}" data-indice="/busca-geral.json?v={v}" data-dica="Voo (LA 3300), rota (GRU SSA), cidade ou aeroporto" defer></script>
 {GOAT}
@@ -694,6 +698,7 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
 {mapa_card_home(B, aero_pag)}
 {dem_card_home(B)}
 {explora_card_home(B)}
+{preco_card_home(B)}
 <section class="card"><div class="card-head"><h2>Ranking das companhias em {mes}</h2><span class="small">Companhias com mais de {nf(MIN_CIA_RANK)} voos no mês</span></div>
 {tab_cias}
 <p class="nota">No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC.</p></section>
@@ -998,6 +1003,8 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
         pares.append((f"Qual o melhor horário para voar de {co} para {cd}?",
                       f"Voos com saída na {melhor_p[0].split(' (')[0].lower()}: {pc(melhor_p[1].p_pont)} no horário, contra "
                       f"{pc(pior_p[1].p_pont)} na {pior_p[0].split(' (')[0].lower()}, nos últimos 3 meses."))
+    preco, pares_p, res_p = bloco_preco(B, [f"{o}-{d}"], f"{B.cidade(o)} para {B.cidade(d)}", "r")
+    pares = pares_p + pares if pares_p else pares
     faq, ld = faq_html(pares)
     volta = (d, o) in rota_pag
     def _vol(k):
@@ -1014,8 +1021,9 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
         rel_html += f'<section class="card"><h2>Outras rotas chegando a {esc(B.cidade(d))} ({esc(cd)})</h2><div class="btns">{_links(outras_d, lambda k: " · " + esc(B.cidade(k[0])))}</div></section>'
     corpo = f"""<section class="hero"><span class="kicker">Rota · voos diretos</span><h1>{esc(B.nome_cod(o))} → {esc(B.nome_cod(d))}</h1>
 <p class="lead">Em {base_txt}, <strong>{pc(a.p_pont)}</strong> dos voos chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados. {dur}</p>
-<div class="btns">{f'<a class="btn sec" href="/rotas/{B.rota_slug(d, o)}/">Ver a volta: {esc(cd)} → {esc(co)}</a>' if volta else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(o)}/">Aeroporto {esc(co)}</a>' if o in B.pag_aero else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(d)}/">Aeroporto {esc(cd)}</a>' if d in B.pag_aero else ""}{trajeto_btn(B, o, d)}</div></section>
+<div class="btns">{f'<a class="btn sec" href="/rotas/{B.rota_slug(d, o)}/">Ver a volta: {esc(cd)} → {esc(co)}</a>' if volta else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(o)}/">Aeroporto {esc(co)}</a>' if o in B.pag_aero else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(d)}/">Aeroporto {esc(cd)}</a>' if d in B.pag_aero else ""}{trajeto_btn(B, o, d)}{'<a class="btn" href="#preco">Preço da passagem</a>' if res_p else ""}</div></section>
 {tiles_acc(a, a0)}
+{preco}
 {dem_rota(B, o, d)}
 <section class="card"><div class="card-head"><h2>Por companhia nesta rota</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Atraso médio dos atrasados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_c}</tbody></table></div></section>
 <section class="card"><div class="card-head"><h2>Os voos desta rota, do mais ao menos pontual</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Companhia</th><th scope="col">Saída prevista</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Atraso médio</th><th scope="col" class="r">Cancelados</th></tr></thead><tbody>{lin_v}</tbody></table></div>
@@ -1028,8 +1036,9 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
 {rel_html}
 {aviso_direitos()}
 {faq}"""
-    return pagina(B, f"/rotas/{B.rota_slug(o, d)}/", f"Voos {B.cidade(o)} ({co}) → {B.cidade(d)} ({cd}): atrasos e cancelamentos | Voo em Números",
-                  f"{cap(base_txt)}: {pc(a.p_pont)} dos voos {co}–{cd} chegaram no horário e {pc(a.p_canc)} foram cancelados. Veja o voo e a companhia mais pontuais.",
+    return pagina(B, f"/rotas/{B.rota_slug(o, d)}/", f"Voos {B.cidade(o)} ({co}) → {B.cidade(d)} ({cd}): atrasos e {'preço' if res_p else 'cancelamentos'} | Voo em Números",
+                  (f"Tarifa média de {rs(res_p['media'])} em {mes_nome(B.tar.ref)}, com curva de preços e evolução em 13 meses. " if res_p else "")
+                  + f"{cap(base_txt)}: {pc(a.p_pont)} dos voos {co}–{cd} chegaram no horário e {pc(a.p_canc)} foram cancelados. Veja o voo e a companhia mais pontuais.",
                   corpo, "/rotas/", migalhas=[("/rotas/", "Rotas"), ("", f"{co} → {cd}")], jsonld=[ld],
                   continuar=itens_cidade(B, d)[:2] + itens_cidade(B, o)[:1])
 
@@ -1090,6 +1099,7 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 <div class="btns">{botao_ao_vivo(c, n)}{B.link_rota(o, d, "Ver a rota " + esc(B.cod(o)) + " → " + esc(B.cod(d))).replace("<a ", '<a class="btn sec" ', 1) if (o, d) in B.pag_rotas else ""}</div></section>
 <div class="tiles">{tile("Chegou no horário", pc(a.p_pont), "até 30 min de atraso")}{tile("Cancelado", pc(a.p_canc), f"{nf(a.canc)} de {nf(a.prev)} previstos")}{tile("Atraso médio quando atrasa", min_txt(a.media_atr), "atrasos acima de 30 min")}{tile("Atrasos acima de 1 hora", pc(a.p_a60), f"{nf(a.b[1] + a.b[2] + a.b[3])} viagens")}</div>
 <section class="card"><div class="card-head"><h2>Trechos deste voo</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Trecho</th><th scope="col">Saída prevista</th><th scope="col">Avião</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelado</th><th scope="col" class="r">Previstos</th></tr></thead><tbody>{"".join(lin_l)}</tbody></table></div></section>
+{preco_card_voo(B, o, d)}
 <div class="grid2">
 <section class="card"><h2>Quanto ele atrasa</h2>{dist_html}<p class="nota">Atraso na chegada das {nf(a.med)} viagens realizadas nos últimos 3 meses.</p></section>
 <section class="card"><div class="card-head"><h2>Outros voos {esc(B.cod(o))} → {esc(B.cod(d))}</h2><span class="small">Do mais ao menos pontual</span></div><div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Companhia</th><th scope="col">Saída</th><th scope="col" class="r">No horário</th></tr></thead><tbody>{lin_o}</tbody></table></div></section>
@@ -2398,11 +2408,14 @@ def pg_trajeto(B: Base, so: str, sd: str, rota_pag) -> str:
     if pm:
         pares.append((f"Qual o melhor horário para voar de {co['nome']} para {cd['nome']}?",
                       f"Voos com saída na {pm[0][0]}: {pc(pm[0][1].p_pont)} no horário, contra {pc(pm[1][1].p_pont)} na {pm[1][0]}."))
+    preco, pares_p, res_p = bloco_preco(B, [f"{k[0]}-{k[1]}" for k in combos], f"{co['nome']} para {cd['nome']}", "t")
+    pares = pares_p + pares if pares_p else pares
     faq, ld = faq_html(pares)
     corpo = f"""<section class="hero"><span class="kicker">Trajeto entre cidades</span><h1>Voos de {esc(co["nome"])} para {esc(cd["nome"])}</h1>
 <p class="lead">Somando todos os aeroportos das duas cidades, em {base_txt}, <strong>{pc(a.p_pont)}</strong> dos voos chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados.</p>
-<div class="btns">{volta_html}<a class="btn sec" href="/cidades/{so}/">{esc(co["nome"])}</a><a class="btn sec" href="/cidades/{sd}/">{esc(cd["nome"])}</a></div></section>
+<div class="btns">{volta_html}<a class="btn sec" href="/cidades/{so}/">{esc(co["nome"])}</a><a class="btn sec" href="/cidades/{sd}/">{esc(cd["nome"])}</a>{'<a class="btn" href="#preco">Preço da passagem</a>' if res_p else ""}</div></section>
 {tiles_acc(a, a0)}
+{preco}
 {dem_soma_rotas(B, combos)}
 <section class="card"><div class="card-head"><h2>Qual aeroporto escolher?</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Trecho</th><th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Atraso médio dos atrasados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin}</tbody></table></div>
 <p class="nota">Cada linha é uma rota entre um aeroporto de {esc(co["nome"])} e um de {esc(cd["nome"])}. Toque na rota para ver horários, companhias e voos.</p></section>
@@ -2411,8 +2424,9 @@ def pg_trajeto(B: Base, so: str, sd: str, rota_pag) -> str:
 {sp_html}
 {aviso_direitos()}
 {faq}"""
-    return pagina(B, f"/trajetos/{so}-para-{sd}/", f"Voos de {co['nome']} para {cd['nome']}: atrasos e cancelamentos | Voo em Números",
-                  f"{cap(base_txt)}: {pc(a.p_pont)} dos voos de {co['nome']} para {cd['nome']} chegaram no horário e {pc(a.p_canc)} foram cancelados. Compare aeroportos, companhias e horários.",
+    return pagina(B, f"/trajetos/{so}-para-{sd}/", f"Voos de {co['nome']} para {cd['nome']}: atrasos e {'preço' if res_p else 'cancelamentos'} | Voo em Números",
+                  (f"Tarifa média de {rs(res_p['media'])} em {mes_nome(B.tar.ref)}, com curva de preços. " if res_p else "")
+                  + f"{cap(base_txt)}: {pc(a.p_pont)} dos voos de {co['nome']} para {cd['nome']} chegaram no horário e {pc(a.p_canc)} foram cancelados. Compare aeroportos, companhias e horários.",
                   corpo, "/cidades/", migalhas=[("/cidades/", "Cidades"), (f"/cidades/{so}/", co["nome"]), ("", f"para {cd['nome']}")], jsonld=[ld],
                   continuar=itens_cidade(B, cd["aeros"][0])[:2] + itens_cidade(B, co["aeros"][0])[:1])
 
@@ -2616,6 +2630,390 @@ def explora_card_home(B: Base) -> str:
             f'<a class="btn sec" href="/rankings/voos-que-mais-atrasam/">Voos que mais atrasam</a>'
             f'<a class="btn sec" href="/rankings/voos-mais-pontuais/">Voos mais pontuais</a>'
             f'<a class="btn" href="/rankings/">Todos os rankings</a></div></section></div>')
+
+
+# ---------------------------------------------------------------- preço das passagens (microdados de tarifas da ANAC)
+TAR_ARQ = RAIZ / "data" / "tarifas.json"
+CIA_TAR = {"TAM": "LATAM", "GLO": "GOL", "AZU": "Azul"}
+COR_TAR = {"": "#2A9DE0", "TAM": "#C2410C", "GLO": "#6B7280", "AZU": "#0F766E"}
+MIN_ASS_TOTAL = 150      # assentos no mês para a rota ganhar bloco de preço
+MIN_ASS_CIA = 80         # assentos no mês para a companhia ganhar curva própria
+
+
+class Tarifas:
+    def __init__(self, arq: Path):
+        d = json.loads(arq.read_text(encoding="utf-8"))
+        self.ref, self.atualizado, self.edges = d["ref"], d["atualizado_em"], d["edges"]
+        self.nac, self.nac_h, self.rotas, self.cias, self.h = d["nac"], d["nac_h"], d["rotas"], d["cias"], d["h"]
+        self.meses = sorted(self.nac)
+        ipca = d.get("ipca", {})
+        self.real = all(m in ipca for m in self.meses[1:])
+        self.fator, f = {}, 1.0
+        for m in reversed(self.meses):
+            self.fator[m] = f if self.real else 1.0
+            f *= 1 + ipca.get(m, 0) / 100
+
+    def soma(self, keys, cia: str = ""):
+        tot = {}
+        for k in keys:
+            src = self.rotas.get(k, {}) if not cia else self.cias.get(k, {}).get(cia, {})
+            for m, (q, s) in src.items():
+                t = tot.setdefault(m, [0, 0])
+                t[0] += q
+                t[1] += s
+        return tot
+
+    def serie(self, keys, cia: str = "", minq: int = 30):
+        tot = self.soma(keys, cia)
+        return [(tot[m][1] / tot[m][0] * self.fator[m]) if m in tot and tot[m][0] >= minq else None for m in self.meses]
+
+    def hist(self, keys, cia: str = ""):
+        out = None
+        for k in keys:
+            h = self.h.get(k, {}).get(cia)
+            if h:
+                out = h[:] if out is None else [a + b for a, b in zip(out, h)]
+        return out
+
+
+def _lim(edges, i):
+    return edges[i + 1] if i + 1 < len(edges) else edges[i] * 1.5
+
+
+def hist_pct(counts, edges, p: float) -> float:
+    tot = sum(counts)
+    alvo, acc = p * tot, 0
+    for i, c in enumerate(counts):
+        if c and acc + c >= alvo:
+            lo, hi = edges[i], _lim(edges, i)
+            return lo + (alvo - acc) / c * (hi - lo)
+        acc += c
+    return edges[-1]
+
+
+def hist_cdf(counts, edges, x: float) -> float:
+    tot, acc = sum(counts), 0.0
+    for i, c in enumerate(counts):
+        lo, hi = edges[i], _lim(edges, i)
+        if x >= hi:
+            acc += c
+        elif x > lo:
+            acc += c * (x - lo) / (hi - lo)
+            break
+        else:
+            break
+    return acc / tot if tot else 0.0
+
+
+def rs(v, d: int = 0) -> str:
+    return "R$ " + nf(v, d)
+
+
+def nice_step(span: float) -> int:
+    for s in (50, 100, 250, 500, 1000, 2000):
+        if span / s <= 7:
+            return s
+    return 2000
+
+
+def svg_linha_preco(rot, val, aria: str) -> str:
+    """Reserva estática do gráfico de 13 meses (a linha interativa a substitui quando há JavaScript)."""
+    W, H, ml, mr, mt, mb = 720, 200, 20, 20, 26, 28
+    pts = [(i, v) for i, v in enumerate(val) if v is not None]
+    if len(pts) < 2:
+        return ""
+    lo, hi = min(v for _, v in pts), max(v for _, v in pts)
+    lo, hi = lo - (hi - lo) * 0.25 - 1, hi + (hi - lo) * 0.25 + 1
+    n = len(val)
+    X = lambda i: ml + i * (W - ml - mr) / max(n - 1, 1)
+    Y = lambda v: mt + (hi - v) / (hi - lo) * (H - mt - mb)
+    poly = " ".join(f"{X(i):.1f},{Y(v):.1f}" for i, v in pts)
+    mx, mn = max(pts, key=lambda t: t[1]), min(pts, key=lambda t: t[1])
+    txt = []
+    for i, v in {pts[0][0]: pts[0][1], pts[-1][0]: pts[-1][1], mx[0]: mx[1], mn[0]: mn[1]}.items():
+        txt.append(f'<text x="{X(i):.1f}" y="{Y(v) - 8:.1f}" text-anchor="middle" font-size="12" fill="#3D424A" font-weight="700">{esc(rs(v))}</text>')
+    pontos = "".join(f'<circle cx="{X(i):.1f}" cy="{Y(v):.1f}" r="3" fill="#2A9DE0"/>' for i, v in pts)
+    eixo = "".join(f'<text x="{X(i):.1f}" y="{H - 8}" text-anchor="middle" font-size="11" fill="#5A6070">{esc(rot[i])}</text>' for i in range(0, n, 2))
+    return (f'<div class="chart"><svg viewBox="0 0 {W} {H}" role="img" aria-label="{esc(aria)}">'
+            f'<line x1="{ml}" y1="{H - mb}" x2="{W - mr}" y2="{H - mb}" stroke="#C6D2DC"/>'
+            f'<polyline points="{poly}" fill="none" stroke="#2A9DE0" stroke-width="2.5" stroke-linejoin="round"/>{pontos}{"".join(txt)}{eixo}</svg></div>')
+
+
+def grafico_preco_13m(T: Tarifas, keys, aria: str):
+    """Linha do preço médio dos últimos 13 meses: total e, quando há dados, LATAM, GOL e Azul."""
+    rot = [mes_curto(m) for m in T.meses]
+    todas = T.serie(keys, "", 60)
+    if sum(v is not None for v in todas) < 4:
+        return "", todas
+    series = [{"n": "Todas as companhias", "v": [round(v) if v is not None else None for v in todas], "c": COR_TAR[""]}]
+    for cia in CIA_TAR:
+        s = T.serie(keys, cia, MIN_ASS_CIA)
+        if sum(v is not None for v in s) >= 6:
+            series.append({"n": CIA_TAR[cia], "v": [round(v) if v is not None else None for v in s], "c": COR_TAR[cia], "d": 1})
+    cfg = {"t": "l", "p": list(T.meses), "l": rot, "s": series, "d": 0, "pre": "R$ ", "w": 0, "z": 0, "lg": 1 if len(series) > 1 else 0}
+    return fam_gr(cfg, svg_linha_preco(rot, todas, aria), aria), todas
+
+
+def svg_curva(counts, edges, uid: str, aria: str):
+    """Curva de preços (densidade suavizada) com três faixas: 25% mais baratos, metade do meio e 25% mais caros."""
+    W, H, ml, mr, mt, mb = 440, 240, 10, 10, 22, 32
+    q = {p: hist_pct(counts, edges, p) for p in (0.01, 0.10, 0.25, 0.5, 0.75, 0.90, 0.98)}
+    xlo = max(0, 50 * int(q[0.01] / 50))
+    xhi = 50 * (int(q[0.98] / 50) + 1)
+    if xhi - xlo < 200:
+        xhi = xlo + 200
+    px = lambda x: ml + (min(max(x, xlo), xhi) - xlo) / (xhi - xlo) * (W - ml - mr)
+    base = H - mb
+    h = (xhi - xlo) / 22
+    N = 72
+    xs = [xlo + (xhi - xlo) * i / (N - 1) for i in range(N)]
+    dens = [(hist_cdf(counts, edges, x + h) - hist_cdf(counts, edges, x - h)) / (2 * h) for x in xs]
+    mx = max(dens) or 1
+    py = lambda dv: base - dv / mx * (base - mt - 14)
+    ponto = " ".join(f"{px(x):.1f},{py(dv):.1f}" for x, dv in zip(xs, dens))
+    area = f"M{px(xlo):.1f},{base} L{ponto.replace(' ', ' L')} L{px(xhi):.1f},{base} Z"
+    cortes = [(0, q[0.25], "#2A9DE0", "Barato"), (q[0.25], q[0.75], "#A9D8F5", "Normal"), (q[0.75], xhi, "#E8833A", "Caro")]
+    defs, zonas, rotulos = [], [], []
+    for i, (a, b, cor, nome) in enumerate(cortes):
+        xa, xb = (ml if i == 0 else px(a)), (W - mr if i == 2 else px(b))
+        defs.append(f'<clipPath id="z{uid}{i}"><rect x="{xa:.1f}" y="0" width="{max(xb - xa, 0):.1f}" height="{H}"/></clipPath>')
+        zonas.append(f'<path d="{area}" fill="{cor}" clip-path="url(#z{uid}{i})"/>')
+        if xb - xa > 44:
+            rotulos.append(f'<text x="{(xa + xb) / 2:.1f}" y="{mt + 8}" text-anchor="middle" font-size="14" font-weight="700" fill="#2B3038">{nome}</text>')
+    marcas = []
+    for p in (0.25, 0.5, 0.75):
+        x = px(q[p])
+        marcas.append(f'<line x1="{x:.1f}" y1="{mt + 16}" x2="{x:.1f}" y2="{base}" stroke="#3D424A" stroke-width="1" stroke-dasharray="3 3"/>'
+                      f'<text x="{min(max(x, 28), W - 28):.1f}" y="{base + 18}" text-anchor="middle" font-size="13" font-weight="700" fill="#2B3038">{esc(nf(q[p]))}</text>')
+    passo = nice_step(xhi - xlo)
+    ticks = [t for t in range(int(math.ceil(xlo / passo) * passo), int(xhi) + 1, passo)]
+    eixo = "".join(f'<line x1="{px(t):.1f}" y1="{base}" x2="{px(t):.1f}" y2="{base + 4}" stroke="#9AA6B2"/>' for t in ticks)
+    svg = (f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{esc(aria)}"><defs>{"".join(defs)}</defs>{"".join(zonas)}'
+           f'<polyline points="{ponto}" fill="none" stroke="#3D424A" stroke-width="1.6"/>'
+           f'<line x1="{ml}" y1="{base}" x2="{W - mr}" y2="{base}" stroke="#C6D2DC"/>{eixo}{"".join(rotulos)}{"".join(marcas)}'
+           f'<line class="pr-m" x1="0" y1="{mt + 10}" x2="0" y2="{base}" stroke="#111" stroke-width="2.5" visibility="hidden"/>'
+           f'<text class="pr-mt" x="0" y="{mt + 6}" text-anchor="middle" font-size="12" font-weight="700" fill="#111" visibility="hidden"></text></svg>')
+    meta = {"x0": xlo, "x1": xhi, "a": round(px(xlo), 1), "b": round(px(xhi), 1),
+            "q": [round(q[p]) for p in (0.10, 0.25, 0.5, 0.75, 0.90)]}
+    return svg, meta
+
+
+def bloco_curva(T: Tarifas, keys, uid: str, quem: str):
+    """Curva do mês mais recente com seletor de companhia e campo para digitar o preço. Devolve (html, mediana, p25, p75)."""
+    conjuntos = [("", "Todas as companhias", T.hist(keys, ""))]
+    for cia, nome in CIA_TAR.items():
+        h = T.hist(keys, cia)
+        if h and sum(h) >= MIN_ASS_CIA:
+            conjuntos.append((cia, nome, h))
+    dados, svgs = {}, []
+    for i, (cia, nome, h) in enumerate(conjuntos):
+        svg, meta = svg_curva(h, T.edges, f"{uid}{i}", f"Curva de preços de {quem}: {nome}, {mes_nome(T.ref)}")
+        meta["c"] = h
+        meta["n"] = sum(h)
+        meta["nome"] = nome
+        dados[cia] = meta
+        svgs.append(f'<div class="pr-svg" data-k="{cia}"{"" if i == 0 else " hidden"}>{svg}</div>')
+    cfg = {"e": T.edges, "m": mes_nome(T.ref), "d": dados}
+    attr = html.escape(json.dumps(cfg, ensure_ascii=False, separators=(",", ":")), quote=True)
+    sel = ""
+    if len(conjuntos) > 1:
+        sel = ('<label>Companhia <select class="pr-sel">' + "".join(f'<option value="{c}">{esc(n)}</option>' for c, n, _ in conjuntos) + "</select></label>")
+    h0 = conjuntos[0][2]
+    html_ = (f'<div class="pr" data-pr="{attr}"><div class="pr-ctl" hidden>{sel}<label>Preço que você viu (R$)'
+             f'<input class="pr-in" type="text" inputmode="decimal" autocomplete="off" placeholder="ex.: 650"></label></div>'
+             f'<p class="pr-res" aria-live="polite">Digite o preço que você viu para ver onde ele fica na curva.</p>{"".join(svgs)}'
+             f'<p class="nota">Valores em R$ sob as linhas tracejadas: 25% dos bilhetes custaram menos que o primeiro, metade menos que o do meio e 25% mais que o último. Altura da curva = quantidade de bilhetes vendidos naquele preço.</p></div>')
+    return html_, hist_pct(h0, T.edges, 0.5), hist_pct(h0, T.edges, 0.25), hist_pct(h0, T.edges, 0.75)
+
+
+def bloco_preco(B: Base, keys, nome: str, uid: str, titulo: str | None = None):
+    """Bloco "Quanto custa" de uma rota ou trajeto. Devolve (html, perguntas do FAQ, resumo ou None)."""
+    T = getattr(B, "tar", None)
+    if not T:
+        return "", [], None
+    keys = [k for k in keys if k in T.h]
+    h_all = T.hist(keys, "") if keys else None
+    tot = T.soma(keys) if keys else {}
+    if not h_all or sum(h_all) < MIN_ASS_TOTAL or T.ref not in tot:
+        return "", [], None
+    ref = T.ref
+    media = tot[ref][1] / tot[ref][0]
+    m0 = mes_ant_ano(ref)
+    var = None
+    if m0 in tot and tot[m0][0] >= 150 and tot[ref][0] >= 150:
+        var = media / (tot[m0][1] / tot[m0][0] * T.fator[m0]) - 1
+    graf, todas = grafico_preco_13m(T, keys, f"Preço médio da passagem de {nome} nos últimos 13 meses")
+    curva, med, p25, p75 = bloco_curva(T, keys, uid, nome)
+    var_html = ""
+    if var is not None and abs(var) >= 0.0005:
+        var_html = (f'<span class="{"down" if var > 0 else "up"}">{"▲" if var > 0 else "▼"} {nf(abs(var) * 100, 1)}%</span> '
+                    f'contra {mes_curto(m0)}')
+    elif var is not None:
+        var_html = f"igual a {mes_curto(m0)}"
+    tiles = '<div class="tiles">' + "".join([
+        tile(f"Tarifa média em {mes_curto(ref)}", rs(media), var_html),
+        tile("Metade pagou até", rs(med), "valor mediano"),
+        tile("Faixa típica", f"{nf(p25)} a {nf(p75)}", "metade dos bilhetes, em R$"),
+        tile("Bilhetes analisados", abrevia(sum(h_all)), f"vendidos em {mes_nome(ref)}"),
+    ]) + "</div>"
+    # companhias
+    lin = []
+    for cia, cn in CIA_TAR.items():
+        s = T.soma(keys, cia)
+        if ref in s and s[ref][0] >= MIN_ASS_CIA:
+            a = s[ref][1] / s[ref][0]
+            v = ""
+            if m0 in s and s[m0][0] >= MIN_ASS_CIA:
+                x = a / (s[m0][1] / s[m0][0] * T.fator[m0]) - 1
+                v = f'<span class="{"down" if x > 0 else "up"}">{"▲" if x > 0 else "▼"} {nf(abs(x) * 100, 1)}%</span>'
+            lin.append((a, f'<tr><td>{esc(cn)}</td><td class="r num"><b>{rs(a)}</b></td><td class="r num">{v or "–"}</td><td class="r num">{abrevia(s[ref][0])}</td></tr>'))
+    tab_cia = ""
+    if len(lin) > 1:
+        tab_cia = ('<h3>Preço médio por companhia</h3><div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col" class="r">Tarifa média</th>'
+                   f'<th scope="col" class="r">Contra {mes_curto(m0)}</th><th scope="col" class="r">Bilhetes</th></tr></thead><tbody>'
+                   + "".join(t for _, t in sorted(lin)) + "</tbody></table></div>")
+    amostra = " Esta rota teve poucos bilhetes vendidos no mês, então a média e a curva oscilam mais." if sum(h_all) < 1000 else ""
+    corr = (f"Os valores dos meses anteriores estão corrigidos pela inflação (IPCA) para reais de {mes_nome(ref)}, por isso a linha mostra a variação real do preço."
+            if T.real else "Os valores não estão corrigidos pela inflação.")
+    corpo = f"""<section class="card" id="preco"><div class="card-head"><h2>{esc(titulo or "Quanto custa a passagem")}</h2><span class="small">Bilhetes vendidos em {mes_nome(ref)}</span></div>
+{tiles}
+<h3>Preço médio nos últimos 13 meses</h3>{graf}
+<p class="nota">Tarifa média ponderada pela quantidade de bilhetes vendidos em cada mês. {corr}</p>
+{tab_cia}
+<h3>Onde o seu preço fica? A curva de {mes_nome(ref)}</h3>
+<p class="small">Cada ponto da curva mostra quantos bilhetes foram vendidos a cada valor. Digite o preço que você viu e confira se ele é barato, normal ou caro para esta rota.</p>
+{curva}
+<p class="nota">Fonte: ANAC, microdados das tarifas aéreas domésticas comercializadas. É a tarifa seca (sem taxa de embarque, bagagem e extras) de passagens vendidas no mês, seja qual for a data do voo;
+passagens de ida e volta entram como dois trechos e podem incluir viagens com conexão entre as duas cidades. A curva não separa quem comprou com meses de antecedência de quem comprou na véspera:
+compras de última hora tendem a ficar na faixa cara, e promoções com muita antecedência na faixa barata. Use como referência, não como garantia de preço.{amostra}</p></section>"""
+    pares = [(f"Quanto custa a passagem de {nome}?",
+              f"Em {mes_nome(ref)}, a tarifa média dos bilhetes vendidos para esta rota foi de {rs(media)}. Metade dos passageiros pagou até {rs(med)}, "
+              f"e a faixa típica (metade dos bilhetes, do 25º ao 75º percentil) ficou entre {rs(p25)} e {rs(p75)}. "
+              "São valores sem taxa de embarque e extras, e não o preço de uma data específica.")]
+    val = [(m, v) for m, v in zip(T.meses, todas) if v is not None]
+    if len(val) >= 8:
+        bar, car = min(val, key=lambda t: t[1]), max(val, key=lambda t: t[1])
+        pares.append((f"Qual o mês mais barato para comprar passagem de {nome}?",
+                      f"Nos últimos {len(val)} meses, a tarifa média (corrigida pela inflação) foi mais baixa nos bilhetes vendidos em {mes_nome(bar[0])} ({rs(bar[1])}) "
+                      f"e mais alta nos vendidos em {mes_nome(car[0])} ({rs(car[1])}). O mês é o da compra, não o da viagem."))
+    if var is not None:
+        sub = "subiu" if var > 0.005 else "caiu" if var < -0.005 else "ficou estável"
+        pares.append((f"A passagem de {nome} está mais cara ou mais barata que um ano atrás?",
+                      f"A tarifa média {sub}{'' if sub == 'ficou estável' else f' {nf(abs(var) * 100, 1)}%'} em termos reais, de {mes_nome(m0)} para {mes_nome(ref)}"
+                      f"{' (já descontada a inflação do período)' if T.real else ''}."))
+    return corpo, pares, {"media": media, "mediana": med, "p25": p25, "p75": p75, "var": var}
+
+
+def preco_card_voo(B: Base, o: str, d: str) -> str:
+    T = getattr(B, "tar", None)
+    if not T or (o, d) not in B.pag_rotas:
+        return ""
+    k = f"{o}-{d}"
+    tot = T.soma([k]) if k in T.h else {}
+    h = T.hist([k], "") if tot else None
+    if not h or sum(h) < MIN_ASS_TOTAL or T.ref not in tot:
+        return ""
+    a = tot[T.ref][1] / tot[T.ref][0]
+    return (f'<section class="card"><div class="card-head"><h2>Quanto custa a rota {esc(B.cod(o))} → {esc(B.cod(d))}</h2><span class="small">Bilhetes vendidos em {mes_nome(T.ref)}</span></div>'
+            f'<p>Tarifa média da rota: <b>{rs(a)}</b>; metade dos bilhetes custou entre {rs(hist_pct(h, T.edges, 0.25))} e {rs(hist_pct(h, T.edges, 0.75))}. '
+            f'É o preço da rota, não deste voo específico.</p><div class="btns"><a class="btn sec" href="/rotas/{B.rota_slug(o, d)}/#preco">Ver o preço médio, a curva e comparar o seu preço</a></div></section>')
+
+
+def pg_precos(B: Base, rota_pag) -> str:
+    T = B.tar
+    ref = T.ref
+    tot = {m: v for m, v in T.nac.items()}
+    media = tot[ref][1] / tot[ref][0]
+    m0 = mes_ant_ano(ref)
+    var = media / (tot[m0][1] / tot[m0][0] * T.fator[m0]) - 1 if m0 in tot else None
+    serie = [tot[m][1] / tot[m][0] * T.fator[m] for m in T.meses]
+    rot = [mes_curto(m) for m in T.meses]
+    cfg = {"t": "l", "p": list(T.meses), "l": rot, "s": [{"n": "Tarifa média no Brasil", "v": [round(v) for v in serie], "c": COR_TAR[""]}],
+           "d": 0, "pre": "R$ ", "w": 0, "z": 0}
+    graf = fam_gr(cfg, svg_linha_preco(rot, serie, "Tarifa média"), "Tarifa média das passagens domésticas nos últimos 13 meses")
+    # curva nacional
+    T_h = {"__br__": {"": T.nac_h}}
+    T.h.update(T_h)
+    curva, med, p25, p75 = bloco_curva(T, ["__br__"], "br", "todas as rotas do Brasil")
+    del T.h["__br__"]
+    var_html = ""
+    if var is not None:
+        var_html = f'<span class="{"down" if var > 0 else "up"}">{"▲" if var > 0 else "▼"} {nf(abs(var) * 100, 1)}%</span> contra {mes_curto(m0)}'
+    tiles = '<div class="tiles">' + "".join([
+        tile(f"Tarifa média em {mes_curto(ref)}", rs(media), var_html),
+        tile("Metade pagou até", rs(med), "valor mediano"),
+        tile("Faixa típica", f"{nf(p25)} a {nf(p75)}", "metade dos bilhetes, em R$"),
+        tile("Bilhetes analisados", abrevia(tot[ref][0]), f"vendidos em {mes_nome(ref)}"),
+    ]) + "</div>"
+    # rotas mais caras, mais baratas e maiores variações
+    itens = []
+    for k, meses in T.rotas.items():
+        if ref not in meses or meses[ref][0] < 2500 or k not in T.h:
+            continue
+        o, d = k.split("-")
+        a = meses[ref][1] / meses[ref][0]
+        v = None
+        if m0 in meses and meses[m0][0] >= 1500:
+            v = a / (meses[m0][1] / meses[m0][0] * T.fator[m0]) - 1
+        itens.append((k, o, d, a, v, meses[ref][0]))
+
+    def nome_rota(o, d):
+        txt = f"{esc(B.cod(o))} → {esc(B.cod(d))}"
+        lk = f'<a href="/rotas/{B.rota_slug(o, d)}/#preco">{txt}</a>' if (o, d) in B.pag_rotas else txt
+        return f'<td class="wrap">{lk} <span class="small">{esc(B.cidade(o))} → {esc(B.cidade(d))}</span></td>'
+
+    def tabela(lst, mostra_var=True):
+        return "".join(f'<tr>{nome_rota(o, d)}<td class="r num"><b>{rs(a)}</b></td><td class="r num">{(("▲ " if v > 0 else "▼ ") + nf(abs(v) * 100, 1) + "%") if v is not None else "–"}</td></tr>'
+                       for _, o, d, a, v, _ in lst)
+    cab = '<thead><tr><th scope="col">Rota</th><th scope="col" class="r">Tarifa média</th><th scope="col" class="r">Contra {}</th></tr></thead>'.format(mes_curto(m0))
+    caras = sorted(itens, key=lambda t: -t[3])[:15]
+    baratas = sorted(itens, key=lambda t: t[3])[:15]
+    com_var = [t for t in itens if t[4] is not None]
+    altas = sorted(com_var, key=lambda t: -t[4])[:10]
+    quedas = sorted(com_var, key=lambda t: t[4])[:10]
+    pares = [("Quanto custa, em média, uma passagem aérea doméstica no Brasil?",
+              f"Em {mes_nome(ref)}, a tarifa média dos bilhetes vendidos para voos domésticos foi de {rs(media)}, e metade dos passageiros pagou até {rs(med)} (dados da ANAC, tarifa seca sem taxas)."),
+             ("As passagens aéreas estão mais caras que um ano atrás?",
+              (f"A tarifa média {'subiu' if var > 0 else 'caiu'} {nf(abs(var) * 100, 1)}% em termos reais entre {mes_nome(m0)} e {mes_nome(ref)}, já descontada a inflação (IPCA)." if var is not None and T.real
+               else "Veja o gráfico de 13 meses acima para acompanhar a evolução do preço médio."))]
+    faq, ld = faq_html(pares)
+    corpo = f"""<section class="hero"><span class="kicker">Preços · {mes_nome(ref)}</span><h1>Preço das passagens aéreas no Brasil</h1>
+<p class="lead">A tarifa média dos bilhetes domésticos vendidos em {mes_nome(ref)} foi de <strong>{rs(media)}</strong>. Veja a evolução em 13 meses, a curva de preços e as rotas mais caras e mais baratas, com dados oficiais da ANAC.</p></section>
+{tiles}
+<section class="card"><h2>Preço médio nos últimos 13 meses</h2>{graf}<p class="nota">Valores corrigidos pela inflação (IPCA) para reais de {mes_nome(ref)}. Média ponderada pela quantidade de bilhetes vendidos em cada mês.</p></section>
+<section class="card"><h2>Onde o seu preço fica? A curva do país em {mes_nome(ref)}</h2><p class="small">Digite o preço que você viu. Para uma rota específica, use a página da rota, com a curva só daquele trecho.</p>{curva}</section>
+<div class="grid2">
+<section class="card"><div class="card-head"><h2>Rotas mais caras</h2><span class="small">{mes_curto(ref)}</span></div><div class="tw"><table>{cab}<tbody>{tabela(caras)}</tbody></table></div></section>
+<section class="card"><div class="card-head"><h2>Rotas mais baratas</h2><span class="small">{mes_curto(ref)}</span></div><div class="tw"><table>{cab}<tbody>{tabela(baratas)}</tbody></table></div></section>
+</div>
+<div class="grid2">
+<section class="card"><div class="card-head"><h2>Maiores altas em 12 meses</h2><span class="small">Variação real</span></div><div class="tw"><table>{cab}<tbody>{tabela(altas)}</tbody></table></div></section>
+<section class="card"><div class="card-head"><h2>Maiores quedas em 12 meses</h2><span class="small">Variação real</span></div><div class="tw"><table>{cab}<tbody>{tabela(quedas)}</tbody></table></div></section>
+</div>
+<p class="nota">Só entram rotas com pelo menos 2.500 bilhetes vendidos em {mes_nome(ref)}. Fonte: ANAC, microdados das tarifas aéreas domésticas comercializadas: tarifa seca (sem taxas e extras) de passagens vendidas no mês, seja qual for a data do voo. A rota é a origem e o destino do passageiro, mesmo com conexão.</p>
+{aviso_direitos()}
+{faq}"""
+    return pagina(B, "/precos/", f"Preço das passagens aéreas no Brasil: média e curva de {mes_curto(ref)} | Voo em Números",
+                  f"Tarifa média das passagens domésticas em {mes_nome(ref)}: {rs(media)}. Evolução em 13 meses, rotas mais caras e mais baratas e uma curva para comparar o seu preço, com dados da ANAC.",
+                  corpo, "/precos/", migalhas=[("", "Preços")], jsonld=[ld])
+
+
+def preco_card_home(B: Base) -> str:
+    T = getattr(B, "tar", None)
+    if not T:
+        return ""
+    ref = T.ref
+    tot = T.nac[ref]
+    media = tot[1] / tot[0]
+    m0 = mes_ant_ano(ref)
+    var = ""
+    if m0 in T.nac:
+        v = media / (T.nac[m0][1] / T.nac[m0][0] * T.fator[m0]) - 1
+        var = f'<span class="{"down" if v > 0 else "up"}">{"▲" if v > 0 else "▼"} {nf(abs(v) * 100, 1)}%</span> contra {mes_curto(m0)}'
+    return (f'<section class="card"><div class="card-head"><h2>Quanto custa voar?</h2><span class="small">Bilhetes vendidos em {mes_nome(ref)}</span></div>'
+            f'<div class="tiles">{tile("Tarifa média no Brasil", rs(media), var)}</div>'
+            f'<div class="btns"><a class="btn sec" href="/precos/">Ver a curva de preços, as rotas mais caras e as mais baratas</a></div></section>')
+
 
 
 def pg_404(B: Base) -> str:
@@ -3027,12 +3425,17 @@ def escreve(caminho: str, conteudo: str):
     p.write_text(conteudo, encoding="utf-8")
 
 
-LLMS_TXT = '# Voo em Números\n\n> Pontualidade, atrasos e cancelamentos dos voos domésticos regulares no Brasil, por companhia aérea, aeroporto, rota e número de voo, com base nos dados públicos da ANAC.\n\nConsidera atrasado o voo que chega mais de 30 minutos depois do horário previsto, o mesmo corte da ANAC. Cada página mostra percentual no horário, cancelamentos, atraso médio e ranking. Os números descrevem o passado e não garantem o desempenho de um voo específico.\n\n## Principais páginas\n- [Resumo do mês](__BASE__/resumo/): panorama dos voos domésticos\n- [Companhias aéreas](__BASE__/companhias/): pontualidade e cancelamentos por empresa\n- [Aeroportos](__BASE__/aeroportos/): atrasos e cancelamentos por aeroporto\n- [Cidades e estados](__BASE__/cidades/): voos que saem e chegam em cada cidade, com destinos e companhias\n- [Rankings](__BASE__/rankings/): aeroportos, rotas e voos que mais atrasam, cancelam e cumprem o horário\n- [Rotas](__BASE__/rotas/): desempenho de cada ligação entre aeroportos\n- [Demanda](__BASE__/demanda/): passageiros, assentos e ocupação\n- [Mapa](__BASE__/mapa/): visão geográfica da malha\n- [Fim de ano](__BASE__/fim-de-ano/): o que esperar dos voos nas festas\n- [Direitos do passageiro](__BASE__/direitos/): o que fazer em caso de atraso ou cancelamento\n- [Como funciona](__BASE__/sobre/): fonte, método e limitações\n\n## Fonte e atualização\n- Voos: base Voo Regular Ativo (VRA), da ANAC, atualizada todo mês.\n- Passageiros e ocupação: base Dados Estatísticos do Transporte Aéreo, da ANAC, com cerca de dois meses de atraso.\n- Entram voos domésticos regulares de passageiros. Ficam de fora internacionais, só de carga e táxi aéreo.\n- A base não informa o motivo do atraso nem se o cancelamento foi avisado com antecedência.\n\n## Como citar\n- Cite o nome do portal e o link da página usada. Os dados são públicos e os links levam à fonte oficial.\n- Cada página mostra o período dos dados. Informe o período ao usar um número.\n- O portal é independente e não tem ligação com governo, empresas ou instituições financeiras.\n\n## Família em Números\nPortais independentes de dados públicos do Brasil: Óleo em Números (https://oleoemnumeros.com.br), Comex em Números (https://comexemnumeros.com.br), Voo em Números (https://vooemnumeros.com.br) e Economia em Números (https://economiaemnumeros.com.br).\n\n## Contato\n- Erros, sugestões e pedidos de dados: __BASE__/contato/\n'
+LLMS_TXT = '# Voo em Números\n\n> Pontualidade, atrasos e cancelamentos dos voos domésticos regulares no Brasil, por companhia aérea, aeroporto, rota e número de voo, com base nos dados públicos da ANAC.\n\nConsidera atrasado o voo que chega mais de 30 minutos depois do horário previsto, o mesmo corte da ANAC. Cada página mostra percentual no horário, cancelamentos, atraso médio e ranking. Os números descrevem o passado e não garantem o desempenho de um voo específico.\n\n## Principais páginas\n- [Resumo do mês](__BASE__/resumo/): panorama dos voos domésticos\n- [Companhias aéreas](__BASE__/companhias/): pontualidade e cancelamentos por empresa\n- [Aeroportos](__BASE__/aeroportos/): atrasos e cancelamentos por aeroporto\n- [Cidades e estados](__BASE__/cidades/): voos que saem e chegam em cada cidade, com destinos e companhias\n- [Rankings](__BASE__/rankings/): aeroportos, rotas e voos que mais atrasam, cancelam e cumprem o horário\n- [Rotas](__BASE__/rotas/): desempenho de cada ligação entre aeroportos\n- [Preços](__BASE__/precos/): tarifa média das passagens, evolução em 13 meses, curva de preços e rotas mais caras e mais baratas (tarifas da ANAC)\n- [Demanda](__BASE__/demanda/): passageiros, assentos e ocupação\n- [Mapa](__BASE__/mapa/): visão geográfica da malha\n- [Fim de ano](__BASE__/fim-de-ano/): o que esperar dos voos nas festas\n- [Direitos do passageiro](__BASE__/direitos/): o que fazer em caso de atraso ou cancelamento\n- [Como funciona](__BASE__/sobre/): fonte, método e limitações\n\n## Fonte e atualização\n- Voos: base Voo Regular Ativo (VRA), da ANAC, atualizada todo mês.\n- Passageiros e ocupação: base Dados Estatísticos do Transporte Aéreo, da ANAC, com cerca de dois meses de atraso.\n- Entram voos domésticos regulares de passageiros. Ficam de fora internacionais, só de carga e táxi aéreo.\n- A base não informa o motivo do atraso nem se o cancelamento foi avisado com antecedência.\n\n## Como citar\n- Cite o nome do portal e o link da página usada. Os dados são públicos e os links levam à fonte oficial.\n- Cada página mostra o período dos dados. Informe o período ao usar um número.\n- O portal é independente e não tem ligação com governo, empresas ou instituições financeiras.\n\n## Família em Números\nPortais independentes de dados públicos do Brasil: Óleo em Números (https://oleoemnumeros.com.br), Comex em Números (https://comexemnumeros.com.br), Voo em Números (https://vooemnumeros.com.br) e Economia em Números (https://economiaemnumeros.com.br).\n\n## Contato\n- Erros, sugestões e pedidos de dados: __BASE__/contato/\n'
 
 
 def main() -> int:
     B = Base(carrega())
     B.dem = Demanda(DEM_ARQ) if DEM_ARQ.exists() else None
+    try:
+        B.tar = Tarifas(TAR_ARQ) if TAR_ARQ.exists() else None
+    except Exception as e:  # preço é um extra: se o arquivo vier ruim, o site sai sem ele
+        print(f"Aviso: tarifas ignoradas ({e})")
+        B.tar = None
     B.familia = carrega_familia(rede=os.environ.get("VOO_SEM_REDE") != "1")
     if SAIDA.exists():
         shutil.rmtree(SAIDA)
@@ -3078,6 +3481,8 @@ def main() -> int:
         B.fixas.add("/fim-de-ano/")
     if B.dem:
         B.fixas.add("/demanda/")
+    if B.tar:
+        B.fixas.add("/precos/")
 
     urls = []
 
@@ -3118,6 +3523,8 @@ def main() -> int:
     pub("/mapa/", pg_mapa(B, aero_pag), "0.8")
     if B.dem:
         pub("/demanda/", pg_demanda(B, aero_pag, rota_pag), "0.8")
+    if B.tar:
+        pub("/precos/", pg_precos(B, rota_pag), "0.9")
     pub("/sobre/", pg_sobre(B), "0.3")
     pub("/sugestoes/", pg_sugestoes(B), "0.2")
     pub("/contato/", pg_contato(B), "0.2")
@@ -3139,6 +3546,8 @@ def main() -> int:
         idx.append([f"{B.cid[so_]['nome']} → {B.cid[sd_]['nome']} voos entre cidades", "trajeto", f"/trajetos/{so_}-para-{sd_}/"])
     for c_, a_ in sorted(B.pag_ca):
         idx.append([f"{B.cia_nome(c_)} em {B.cidade(a_)} {B.cod(a_)}", "companhia", f"/companhias/{B.cia_slug(c_)}/{B.aero_slug(a_)}/"])
+    if B.tar:
+        idx.append(["Preço das passagens aéreas: tarifa média, curva de preços, rotas mais caras e mais baratas", "guia", "/precos/"])
     for spec_ in RANKINGS:
         idx.append([spec_[1] + " " + spec_[4], "ranking", f"/rankings/{spec_[0]}/"])
     for a in sorted(aero_pag, key=lambda a: -B.soma(B.aero, a, B.u3).prev):
@@ -3164,6 +3573,7 @@ def main() -> int:
     shutil.copy(SITE / "app.js", SAIDA / "assets" / "app.js")
     shutil.copy(SITE / "familia.js", SAIDA / "assets" / "familia.js")
     shutil.copy(SITE / "familia-graficos.js", SAIDA / "assets" / "familia-graficos.js")
+    shutil.copy(SITE / "precos.js", SAIDA / "assets" / "precos.js")
     shutil.copy(SITE / "familia-compartilhar.js", SAIDA / "assets" / "familia-compartilhar.js")
     shutil.copy(SITE / "familia-busca.js", SAIDA / "assets" / "familia-busca.js")
     (SAIDA / "favicon.svg").write_text(
