@@ -16,6 +16,9 @@ import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from familia_card import TEXTO_COMPARTILHE, bloco_imagem, gera_card, sem_imagem, seta  # noqa: E402  imagem do resumo, igual nos portais
+
 RAIZ = Path(__file__).resolve().parent.parent
 SITE = RAIZ / "site"
 MESES_DIR = RAIZ / "data" / "meses"
@@ -456,7 +459,7 @@ LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rec
 
 
 def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo: str = "",
-           migalhas=None, jsonld=None, continuar=None) -> str:
+           migalhas=None, jsonld=None, continuar=None, imagem=None) -> str:
     url = BASE + caminho
     # "Continue explorando": cartões da própria página (continuar) completados pelos do tipo de página;
     # links para páginas do próprio site só entram se a página existe (B.fixas)
@@ -493,7 +496,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <meta property="og:description" content="{esc(descricao)}">
 <meta property="og:url" content="{url}">
 <meta property="og:locale" content="pt_BR">
-<meta property="og:image" content="{BASE}/assets/og.png">
+<meta property="og:image" content="{imagem or BASE + "/assets/og.png"}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
@@ -2174,8 +2177,34 @@ def resumo_post(B: Base, d: dict, manchete: str, cias: list, insight: str) -> st
     return "\n".join(l)
 
 
+def card_resumo(B: Base, d: dict) -> bool:
+    """Imagem do resumo (resumo/AAAA-MM/card.png): pontualidade, cancelamentos e voos, com as barras dos últimos 13 meses."""
+    m, T = d["m"], d["T"]
+    T0 = d["T12"] if d["T12"] and d["T12"].med else None
+    ref = mes_curto(mes_ant_ano(m))
+    def pp(v, v0, sobe_e_bom):
+        if v is None or v0 is None:
+            return "", None
+        dif = 100 * (v - v0)
+        return f"{seta(round(dif, 1))} {nf(abs(dif), 1)} p.p. sobre {ref}", (None if round(dif, 1) == 0 else (dif > 0) == sobe_e_bom)
+    v1, b1 = pp(T.p_pont, T0.p_pont if T0 else None, True)
+    v2, b2 = pp(T.p_canc, T0.p_canc if T0 else None, False)
+    v3 = ""
+    if T0 and T0.prev:
+        r = 100 * (T.prev / T0.prev - 1)
+        v3 = f"{seta(round(r, 1))} {nf(abs(r), 1)}% sobre {ref}"
+    meses = [x for x in B.lista if x <= m][-13:]
+    barras = [(MES_CURTO[int(x[5:]) - 1], [100 * B.tot[x].p_pont if B.tot[x].med >= 10 and B.tot[x].p_pont is not None else None])
+              for x in meses]
+    return gera_card(SAIDA / "resumo" / m / "card.png", "Voo em Números", PORTAIS["voo"][2], f"Pontualidade dos voos · {mes_nome(m)}",
+                     [("No horário", pc(T.p_pont), v1, b1), ("Cancelados", pc(T.p_canc), v2, b2), ("Voos previstos", nf(T.prev), v3, None)],
+                     barras, None, f"% dos voos no horário, mês a mês · Fonte: ANAC · vooemnumeros.com.br/resumo/{m}/",
+                     [nf(v[0], 1) if v[0] is not None else "" for _, v in barras])
+
+
 def pg_resumo(B: Base, m: str) -> str:
     d = resumo_dados(B, m)
+    tem_img = card_resumo(B, d)
     T, T12, mes = d["T"], d["T12"], mes_nome(m)
     manchete = resumo_manchete(d)
     cias, insight = resumo_cias(B, d), resumo_insight(d)
@@ -2226,7 +2255,8 @@ def pg_resumo(B: Base, m: str) -> str:
 <section class="card"><h2>Pontualidade mês a mês</h2>{graf}</section>
 <section class="card"><h2>Para ir além</h2><ul class="links-resumo">{links_html}</ul></section>
 <section class="card"><details class="compartilhe"><summary><h2>Compartilhe este resumo</h2></summary>
-<p class="small">Textos prontos: uma versão curta, para o X, e uma maior, para o LinkedIn, o WhatsApp ou o e-mail.</p>
+<p class="small">{TEXTO_COMPARTILHE}</p>
+{bloco_imagem(f"voo-em-numeros-resumo-{m}.png", f"Pontualidade dos voos domésticos em {mes}: {pc(T.p_pont)} no horário, {pc(T.p_canc)} cancelados")}
 <h3>Para o X</h3>
 <textarea id="post-x" class="fam-post" readonly rows="6">{esc(post_x)}</textarea>
 <div><button type="button" class="fam-btn" data-copiar="post-x"><span>Copiar texto do X</span></button> <span class="small" data-copiar-msg aria-live="polite"></span></div>
@@ -2239,8 +2269,11 @@ def pg_resumo(B: Base, m: str) -> str:
     ld = {"@context": "https://schema.org", "@type": "Article", "headline": manchete, "inLanguage": "pt-BR",
           "datePublished": B.gerado.strftime("%Y-%m-%d"), "author": {"@type": "Organization", "name": "Voo em Números", "url": BASE + "/"},
           "mainEntityOfPage": f"{BASE}/resumo/{m}/"}
-    return pagina(B, f"/resumo/{m}/", f"{manchete} | Voo em Números", desc, corpo, "/resumo/",
-                  migalhas=[("/resumo/", "Resumos mensais"), (None, cap(mes))], jsonld=[ld])
+    img = f"{BASE}/resumo/{m}/card.png" if tem_img else None
+    if img:
+        ld["image"] = img
+    return pagina(B, f"/resumo/{m}/", f"{manchete} | Voo em Números", desc, corpo if tem_img else sem_imagem(corpo), "/resumo/",
+                  migalhas=[("/resumo/", "Resumos mensais"), (None, cap(mes))], jsonld=[ld], imagem=img)
 
 
 def pg_resumos(B: Base) -> str:
