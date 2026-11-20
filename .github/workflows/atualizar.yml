@@ -19,6 +19,7 @@ on:
       - "scripts/**"
       - "site/**"
       - ".github/workflows/atualizar.yml"
+      - "adsense.txt"
 
 permissions:
   contents: write
