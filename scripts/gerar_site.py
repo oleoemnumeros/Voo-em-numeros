@@ -21,6 +21,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from familia_card import TEXTO_COMPARTILHE, bloco_imagem, gera_card, sem_imagem, seta  # noqa: E402  imagem do resumo, igual nos portais
 
 RAIZ = Path(__file__).resolve().parent.parent
+# AdSense: coloque o código do editor (ex.: pub-1234567890123456) em adsense.txt na raiz do repositório; vazio ou ausente = sem anúncios
+_AD = RAIZ / "adsense.txt"
+ADSENSE_ID = re.sub(r"^(ca-)?", "", _AD.read_text(encoding="utf-8").strip()) if _AD.exists() else ""
+if ADSENSE_ID and not re.fullmatch(r"pub-\d{10,20}", ADSENSE_ID):
+    print(f"Aviso: adsense.txt inválido ({ADSENSE_ID!r}); anúncios desligados")
+    ADSENSE_ID = ""
 SITE = RAIZ / "site"
 MESES_DIR = RAIZ / "data" / "meses"
 IATA_ARQ = RAIZ / "data" / "aeroportos_iata.json"
@@ -461,6 +467,8 @@ def continue_padrao(caminho: str) -> list:
 
 
 # Ordem padrão da Família em Números: Início, Resumos, temas do portal, lugares, guias, Como funciona
+ADS_HEAD = (f'<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-{ADSENSE_ID}" crossorigin="anonymous"></script>'
+            if ADSENSE_ID else "")
 NAV = [("/", "Início"), ("/resumo/", "Resumos"), ("/rankings/", "Rankings"), ("/companhias/", "Companhias"), ("/rotas/", "Rotas"), ("/precos/", "Preços"), ("/demanda/", "Passageiros"),
        ("/aeroportos/", "Aeroportos"), ("/cidades/", "Cidades"), ("/mapa/", "Mapa"), ("/direitos/", "Seus direitos"), ("/fim-de-ano/", "Fim de ano"), ("/sobre/", "Como funciona")]
 LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
@@ -517,6 +525,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/estilo.css?v={v}">
+{ADS_HEAD}
 {ld}
 </head>
 <body>
@@ -3586,6 +3595,8 @@ def main() -> int:
     sm += [f"<url><loc>{BASE}{u}</loc><lastmod>{hoje}</lastmod><priority>{p}</priority></url>" for u, p in urls]
     sm.append("</urlset>")
     (SAIDA / "sitemap.xml").write_text("\n".join(sm), encoding="utf-8")
+    if ADSENSE_ID:
+        (SAIDA / "ads.txt").write_text(f"google.com, {ADSENSE_ID}, DIRECT, f08c47fec0942fa0\n", encoding="utf-8")
     (SAIDA / "robots.txt").write_text(f"User-agent: *\nAllow: /\n\nSitemap: {BASE}/sitemap.xml\n", encoding="utf-8")
     (SAIDA / "llms.txt").write_text(LLMS_TXT.replace("__BASE__", BASE), encoding="utf-8")
     (SAIDA / "CNAME").write_text(DOMINIO + "\n", encoding="utf-8")
