@@ -1057,8 +1057,9 @@ def botao_ao_vivo(c: str, n: str) -> str:
     iata = CIAS.get(c, ("", "", ""))[1]
     if not iata or not n.isdigit():
         return ""
-    return (f'<a class="btn" href="https://www.flightradar24.com/data/flights/{iata.lower()}{n}" target="_blank" '
-            f'rel="noopener nofollow">Acompanhar o {iata} {n} agora ↗</a>')
+    fr = {"TAM": "jj"}.get(c, iata.lower())  # no Flightradar24 os voos da LATAM Brasil aparecem como JJ, e não LA
+    return (f'<a class="btn" href="https://www.flightradar24.com/data/flights/{fr}{n}" target="_blank" '
+            f'rel="noopener nofollow">Acompanhe o voo {iata} {n} ↗</a>')
 
 
 def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
