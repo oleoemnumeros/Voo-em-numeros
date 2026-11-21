@@ -3275,10 +3275,10 @@ def resumo_post_x(B: Base, d: dict, cias: list) -> str:
     extremo = f"A {'melhor' if e['tipo'] == 'maior' else 'pior'} em {e['n']} meses." if e else ""
     cs = d["cias"]
     cia = f"Mais pontual: {B.cia_nome(cs[0][0])} ({pc(cs[0][1].p_pont)})." if cs else ""
-    tags = "#aviacao #voos #ANAC"
+    tags = ""   # posts do X sem hashtags
     for usa in ((1, 1, 1), (1, 0, 1), (1, 1, 0), (1, 0, 0), (0, 0, 0)):
         corpo = [cabeca] + ([extremo] if usa[0] and extremo else []) + ([cia] if usa[1] and cia else [])
-        texto = " ".join(corpo) + f"\n\n{url}" + (f"\n{tags}" if usa[2] else "")
+        texto = " ".join(corpo) + f"\n\n{url}" + (f"\n{tags}" if usa[2] and tags else "")
         if len(texto.replace(url, "x" * PESO_LINK_X)) <= LIMITE_X:
             return texto
     return f"{cabeca}\n\n{url}"
