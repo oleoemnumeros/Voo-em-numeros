@@ -341,7 +341,7 @@ def familia_html() -> str:
             itens.append(f'<li>{miolo} <em>você está aqui</em></li>')
         else:
             itens.append(f'<li><a href="{url}">{miolo}</a></li>')
-    return ('<div class="familia"><p><b>Família em Números</b> · portais independentes que organizam dados públicos do Brasil · <a href="https://x.com/familianumeros" rel="noopener" target="_blank">Siga no X</a> · <a href="https://www.linkedin.com/company/familiaemnumeros/" rel="noopener" target="_blank">Siga no LinkedIn</a></p>'
+    return ('<div class="familia"><p><b>Família em Números</b> · portais independentes que organizam dados públicos do Brasil · <a href="https://x.com/familianumeros" rel="noopener" target="_blank">Siga no X</a> · <a href="https://www.instagram.com/familiaemnumeros/" rel="noopener" target="_blank">Siga no Instagram</a> · <a href="https://www.linkedin.com/company/familiaemnumeros/" rel="noopener" target="_blank">Siga no LinkedIn</a></p>'
             f'<ul>{"".join(itens)}</ul></div>')
 
 
