@@ -1117,8 +1117,10 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 <section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria=f"Percentual de viagens do voo {cod} no horário mês a mês")}</section>
 {aviso_direitos()}
 {faq}"""
-    return pagina(B, f"/voos/{B.voo_slug(c, n)}/", f"Voo {cod} ({cia}) {trecho}: atrasos e cancelamentos | Voo em Números",
-                  f"Nos últimos 3 meses, o voo {cod} da {cia} ({trecho}) chegou no horário em {pc(a.p_pont)} das vezes e foi cancelado em {pc(a.p_canc)}.",
+    # título no formato da busca ("ad 4942", "voo 2914 azul"): quem procura quer saber horário e se o voo atrasa
+    return pagina(B, f"/voos/{B.voo_slug(c, n)}/", f"Voo {cod} {cia} ({trecho}): horário e atrasos, {pc(a.p_pont)} no horário",
+                  f"O voo {cod} da {cia} ({trecho}){f' sai às {hora0}' if hora0 else ''} e chegou no horário em {pc(a.p_pont)} das vezes "
+                  f"nos últimos 3 meses, com {pc(a.p_canc)} de cancelamentos. Veja o atraso médio, o histórico e o status ao vivo.",
                   corpo, "/rotas/", migalhas=[("/companhias/" + B.cia_slug(c) + "/", cia), ("", f"Voo {cod}")], jsonld=[ld])
 
 
