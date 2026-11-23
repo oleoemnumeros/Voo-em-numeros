@@ -1052,6 +1052,47 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
                   continuar=itens_cidade(B, d)[:2] + itens_cidade(B, o)[:1])
 
 
+# Link de afiliado de indenização (ex.: AirHelp): URL em afiliado_indenizacao.txt na raiz; vazio ou ausente = sem link
+_AFI = RAIZ / "afiliado_indenizacao.txt"
+AFILIADO_INDENIZACAO = _AFI.read_text(encoding="utf-8").strip() if _AFI.exists() else ""
+if AFILIADO_INDENIZACAO and not AFILIADO_INDENIZACAO.startswith("https://"):
+    AFILIADO_INDENIZACAO = ""
+
+
+def calc_atraso_voo(cod: str, a) -> str:
+    """"Seu voo atrasou?": o que a companhia deve oferecer conforme a espera (Res. ANAC 400/2016, com a Res. 813/2026)."""
+    tot = a.med or 0
+    p2 = (a.b[2] + a.b[3]) / tot if tot else None
+    p4 = a.b[3] / tot if tot else None
+    hist = ""
+    if p2 == 0:
+        hist = f'<p class="small">No histórico do {esc(cod)}, nenhuma viagem chegou com mais de 2 horas de atraso nos últimos 3 meses.</p>'
+    elif p2 is not None:
+        hist = (f'<p class="small">No histórico do {esc(cod)}, {pc(p2)} das viagens chegaram com mais de 2 horas de atraso '
+                f'e {pc(p4)} com mais de 4 horas (últimos 3 meses).</p>')
+    afi = ""
+    if AFILIADO_INDENIZACAO:
+        afi = (f'<p class="pub"><span class="small">Publicidade</span> Teve atraso longo ou cancelamento e a companhia não resolveu? '
+               f'<a href="{esc(AFILIADO_INDENIZACAO)}" target="_blank" rel="sponsored noopener">Veja se o seu caso pode ter indenização</a>. '
+               'O serviço cobra uma parte do valor só se você receber; também dá para reclamar sem custo na ANAC, no consumidor.gov.br ou no Juizado Especial.</p>')
+    base = '<li>Informação clara sobre o motivo, a nova previsão e as alternativas, por canais digitais e no aeroporto.</li>'
+    comida = '<li><b>Alimentação</b>: crédito, refeição ou solução equivalente.</li>'
+    opcoes = ('<li><b>Você escolhe</b>: outro voo, reembolso integral da passagem ou seguir por outro meio de transporte.</li>'
+              '<li><b>Hospedagem e transporte</b> de ida e volta, se precisar passar a noite (quem mora na cidade pode ficar só com o transporte).</li>')
+    casos = [("Menos de 2 horas", base, ""),
+             ("De 2 a 4 horas", base + comida, ""),
+             ("Mais de 4 horas", base + comida + opcoes, afi),
+             ("Voo cancelado", base + '<li><b>Você escolhe</b>: outro voo, reembolso integral ou outro meio de transporte.</li>'
+              + '<li>Alimentação a partir de 2 horas de espera e hospedagem a partir de 4 horas, se precisar passar a noite.</li>', afi)]
+    det = "".join(f'<details class="calc" name="atr"{" open" if i == 0 else ""}><summary>{t}</summary><ul>{li}</ul>{extra}</details>'
+                  for i, (t, li, extra) in enumerate(casos))
+    return (f'<section class="card" id="atrasou"><h2>Seu voo atrasou? O que a companhia deve oferecer</h2>'
+            f'<p class="small">Toque no tempo de espera no aeroporto:</p>{det}{hist}'
+            '<p class="nota">Regras da ANAC (Resolução 400/2016, atualizada em outubro de 2026). A assistência vale mesmo com mau tempo. '
+            'Se não receber, guarde comprovantes e reclame no balcão, no SAC e na ANAC. <a href="/direitos/">Guia completo dos seus direitos</a>.</p></section>')
+
+
+
 def botao_ao_vivo(c: str, n: str) -> str:
     """Abre o voo em tempo real no Flightradar24 (só para companhias com código IATA conhecido)."""
     iata = CIAS.get(c, ("", "", ""))[1]
@@ -1094,6 +1135,17 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
                         f'<span>{nome}</span><span class="num">{nf(q)} voos</span></div>{meter(q / a.med if a.med else None, ruim=i > 0)}</div>'
                         for i, (nome, q) in enumerate(dist))
     hora0 = B.voo_hora[(c, n, o, d)].most_common(1)[0][0] if B.voo_hora[(c, n, o, d)] else ""
+    rank_txt, alt_html = "", ""
+    if pos and len(outros) > 2:
+        lugar_r = "o mais pontual" if pos == 1 else "o menos pontual" if pos == len(outros) else f"o {pos}º mais pontual"
+        rank_txt = f" É {lugar_r} entre {len(outros)} voos diretos {esc(B.cod(o))} → {esc(B.cod(d))}."
+        melhor = outros[0]
+        if pos > 1 and melhor[1].p_pont is not None and a.p_pont is not None and melhor[1].p_pont - a.p_pont >= 0.05:
+            mk = melhor[0]
+            nome_m = (f'<a href="/voos/{B.voo_slug(*mk)}/">{esc(B.cod_voo(*mk))}</a>' if mk in voo_pag else esc(B.cod_voo(*mk)))
+            alt_html = (f'<section class="card destaque"><p><b>Quer chegar no horário?</b> O {nome_m} ({esc(B.cia_nome(mk[0]))}'
+                        f'{f", saída às {esc(melhor[2])}" if melhor[2] else ""}) é o mais pontual de {esc(B.cod(o))} para {esc(B.cod(d))}: '
+                        f'chegou no horário em <b>{pc(melhor[1].p_pont)}</b> das viagens, contra {pc(a.p_pont)} do {esc(cod)}.</p></section>')
     pares = [(f"O voo {cod} costuma atrasar?",
               f"Nos últimos 3 meses, o {cod} da {cia} ({trecho}) chegou no horário em {pc(a.p_pont)} das vezes e foi cancelado em {pc(a.p_canc)} dos dias previstos."),
              (f"Quanto tempo atrasa o voo {cod}?",
@@ -1105,10 +1157,13 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
                       f"Ele é {lugar} entre {len(outros)} voos diretos {B.cod(o)}–{B.cod(d)} com pelo menos 10 viagens nos últimos 3 meses."))
     faq, ld = faq_html(pares)
     corpo = f"""<section class="hero"><span class="kicker">Voo · {esc(cia)}</span><h1>Voo {esc(cod)}: {esc(trecho)}</h1>
-<p class="lead">Nos últimos 3 meses, o {esc(cod)}{f" (saída prevista às {hora0})" if hora0 else ""} chegou no horário em <strong>{pc(a.p_pont)}</strong> das viagens e foi cancelado em <strong>{pc(a.p_canc)}</strong> dos dias previstos.</p>
-<div class="btns">{botao_ao_vivo(c, n)}{B.link_rota(o, d, "Ver a rota " + esc(B.cod(o)) + " → " + esc(B.cod(d))).replace("<a ", '<a class="btn sec" ', 1) if (o, d) in B.pag_rotas else ""}</div></section>
+<p class="lead">Nos últimos 3 meses, o {esc(cod)}{f" (saída prevista às {hora0})" if hora0 else ""} chegou no horário em <strong>{pc(a.p_pont)}</strong> das viagens e foi cancelado em <strong>{pc(a.p_canc)}</strong> dos dias previstos.{rank_txt}</p>
+<div class="btns"><a class="btn" href="#atrasou">Seu voo atrasou?</a>{B.link_rota(o, d, "Ver a rota " + esc(B.cod(o)) + " → " + esc(B.cod(d))).replace("<a ", '<a class="btn sec" ', 1) if (o, d) in B.pag_rotas else ""}</div></section>
 <div class="tiles">{tile("Chegou no horário", pc(a.p_pont), "até 30 min de atraso")}{tile("Cancelado", pc(a.p_canc), f"{nf(a.canc)} de {nf(a.prev)} previstos")}{tile("Atraso médio quando atrasa", min_txt(a.media_atr), "atrasos acima de 30 min")}{tile("Atrasos acima de 1 hora", pc(a.p_a60), f"{nf(a.b[1] + a.b[2] + a.b[3])} viagens")}</div>
 <section class="card"><div class="card-head"><h2>Trechos deste voo</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Trecho</th><th scope="col">Saída prevista</th><th scope="col">Avião</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelado</th><th scope="col" class="r">Previstos</th></tr></thead><tbody>{"".join(lin_l)}</tbody></table></div></section>
+{calc_atraso_voo(cod, a)}
+{f'<div class="btns" style="margin:0 0 16px">{botao_ao_vivo(c, n)}</div>' if botao_ao_vivo(c, n) else ""}
+{alt_html}
 {preco_card_voo(B, o, d)}
 <div class="grid2">
 <section class="card"><h2>Quanto ele atrasa</h2>{dist_html}<p class="nota">Atraso na chegada das {nf(a.med)} viagens realizadas nos últimos 3 meses.</p></section>

@@ -20,6 +20,7 @@ on:
       - "site/**"
       - ".github/workflows/atualizar.yml"
       - "adsense.txt"
+      - "afiliado_indenizacao.txt"
 
 permissions:
   contents: write
