@@ -263,3 +263,11 @@ details.calc ul{margin:10px 14px 12px 32px;padding:0;line-height:1.5}
 details.calc li{margin:4px 0}
 .pub{margin:0 14px 12px;padding:10px 12px;background:#FFF7E6;border-radius:8px;font-size:15px}
 .pub .small{display:block;text-transform:uppercase;letter-spacing:.04em;font-size:11px;color:#6B7280}
+
+/* cidade de destino nos outros portais (páginas de voo), logo abaixo dos números */
+.destino{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:0 0 16px;padding:12px 16px;border:1px solid var(--line,#d9e2ec);border-radius:10px;background:var(--card,#fff)}
+.destino b{font-size:.95rem}
+.destino span{display:flex;flex-wrap:wrap;gap:8px}
+.destino a{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line,#d9e2ec);border-radius:999px;font-size:.88rem;font-weight:600;text-decoration:none}
+.destino a:hover{border-color:currentColor}
+.destino a i{width:9px;height:9px;border-radius:50%;display:inline-block}

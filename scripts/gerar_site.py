@@ -439,16 +439,16 @@ def linha_destino(B: Base, d: str) -> str:
     if not achados:
         return ""
     cid = B.cidade(d)
-    rot = {"economia": "população e economia", "comex": "o que exporta", "oleo": "royalties de petróleo"}
+    rot = {"economia": "População e economia", "comex": "O que a cidade exporta", "oleo": "Royalties de petróleo"}
     links = []
     for n in ("economia", "comex", "oleo"):
         if n in achados:
             portal, caminho, _ = achados[n]
             nome, base, cor = PORTAIS[portal]
             links.append(f'<a href="{esc(base + caminho)}" data-goatcounter-click="destino/{ESTE}-{portal}" '
-                         f'data-goatcounter-title="Destino: {esc(cid)} ({nome})">{rot[n]}</a>')
-    return (f'<p class="small" style="margin:0 0 16px">Vai para {esc(cid)}? Veja {esc(cid)} em números: '
-            f'{" · ".join(links)}.</p>')
+                         f'data-goatcounter-title="Destino: {esc(cid)} ({nome})"><i style="background:{cor}"></i>{rot[n]}</a>')
+    return (f'<aside class="destino" aria-label="{esc(cid)} em números"><b>Vai para {esc(cid)}? Veja {esc(cid)} em números</b>'
+            f'<span>{"".join(links)}</span></aside>')
 
 
 def continue_padrao(caminho: str) -> list:
@@ -1178,10 +1178,10 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 <p class="lead">Nos últimos 3 meses, o {esc(cod)}{f" (saída prevista às {hora0})" if hora0 else ""} chegou no horário em <strong>{pc(a.p_pont)}</strong> das viagens e foi cancelado em <strong>{pc(a.p_canc)}</strong> dos dias previstos.{rank_txt}</p>
 <div class="btns"><a class="btn" href="#atrasou">Seu voo atrasou?</a>{B.link_rota(o, d, "Ver a rota " + esc(B.cod(o)) + " → " + esc(B.cod(d))).replace("<a ", '<a class="btn sec" ', 1) if (o, d) in B.pag_rotas else ""}</div></section>
 <div class="tiles">{tile("Chegou no horário", pc(a.p_pont), "até 30 min de atraso")}{tile("Cancelado", pc(a.p_canc), f"{nf(a.canc)} de {nf(a.prev)} previstos")}{tile("Atraso médio quando atrasa", min_txt(a.media_atr), "atrasos acima de 30 min")}{tile("Atrasos acima de 1 hora", pc(a.p_a60), f"{nf(a.b[1] + a.b[2] + a.b[3])} viagens")}</div>
+{linha_destino(B, d)}
 <section class="card"><div class="card-head"><h2>Trechos deste voo</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Trecho</th><th scope="col">Saída prevista</th><th scope="col">Avião</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelado</th><th scope="col" class="r">Previstos</th></tr></thead><tbody>{"".join(lin_l)}</tbody></table></div></section>
 {calc_atraso_voo(cod, a)}
 {f'<div class="btns" style="margin:0 0 16px">{botao_ao_vivo(c, n)}</div>' if botao_ao_vivo(c, n) else ""}
-{linha_destino(B, d)}
 {alt_html}
 {preco_card_voo(B, o, d)}
 <div class="grid2">
