@@ -433,6 +433,24 @@ def itens_cidade(B: Base, icao: str) -> list:
     return [(p, c, titulos[n], d) for n in ("economia", "comex", "oleo") if n in achados for (p, c, d) in [achados[n]]]
 
 
+def linha_destino(B: Base, d: str) -> str:
+    """Linha curta com a cidade de destino nos outros portais (só os que têm página da cidade)."""
+    achados = B.familia.get(chave_cidade(B.cidade(d), B.uf(d)), {})
+    if not achados:
+        return ""
+    cid = B.cidade(d)
+    rot = {"economia": "população e economia", "comex": "o que exporta", "oleo": "royalties de petróleo"}
+    links = []
+    for n in ("economia", "comex", "oleo"):
+        if n in achados:
+            portal, caminho, _ = achados[n]
+            nome, base, cor = PORTAIS[portal]
+            links.append(f'<a href="{esc(base + caminho)}" data-goatcounter-click="destino/{ESTE}-{portal}" '
+                         f'data-goatcounter-title="Destino: {esc(cid)} ({nome})">{rot[n]}</a>')
+    return (f'<p class="small" style="margin:0 0 16px">Vai para {esc(cid)}? Veja {esc(cid)} em números: '
+            f'{" · ".join(links)}.</p>')
+
+
 def continue_padrao(caminho: str) -> list:
     """Cartões por tipo de página, para as que não passam os seus."""
     direitos = ("voo", "/direitos/", "Seus direitos se o voo atrasar", "O que a companhia deve pagar ou oferecer, por tempo de atraso")
@@ -1163,6 +1181,7 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 <section class="card"><div class="card-head"><h2>Trechos deste voo</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Trecho</th><th scope="col">Saída prevista</th><th scope="col">Avião</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelado</th><th scope="col" class="r">Previstos</th></tr></thead><tbody>{"".join(lin_l)}</tbody></table></div></section>
 {calc_atraso_voo(cod, a)}
 {f'<div class="btns" style="margin:0 0 16px">{botao_ao_vivo(c, n)}</div>' if botao_ao_vivo(c, n) else ""}
+{linha_destino(B, d)}
 {alt_html}
 {preco_card_voo(B, o, d)}
 <div class="grid2">
@@ -1176,7 +1195,8 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
     return pagina(B, f"/voos/{B.voo_slug(c, n)}/", f"Voo {cod} {cia} ({trecho}): horário e atrasos, {pc(a.p_pont)} no horário",
                   f"O voo {cod} da {cia} ({trecho}){f' sai às {hora0}' if hora0 else ''} e chegou no horário em {pc(a.p_pont)} das vezes "
                   f"nos últimos 3 meses, com {pc(a.p_canc)} de cancelamentos. Veja o atraso médio, o histórico e o status ao vivo.",
-                  corpo, "/rotas/", migalhas=[("/companhias/" + B.cia_slug(c) + "/", cia), ("", f"Voo {cod}")], jsonld=[ld])
+                  corpo, "/rotas/", migalhas=[("/companhias/" + B.cia_slug(c) + "/", cia), ("", f"Voo {cod}")], jsonld=[ld],
+                  continuar=itens_cidade(B, d)[:2] + itens_cidade(B, o)[:1])
 
 
 def periodo_fim(B: Base):
