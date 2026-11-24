@@ -271,3 +271,14 @@ details.calc li{margin:4px 0}
 .destino a{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line,#d9e2ec);border-radius:999px;font-size:.88rem;font-weight:600;text-decoration:none}
 .destino a:hover{border-color:currentColor}
 .destino a i{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+/* voo a voo */
+table.vv td,table.vv th{padding:8px 6px}
+table.vv td:last-child{white-space:normal;line-height:1.25}
+table.vv td:first-child{color:var(--ink2);line-height:1.2}
+table.vv td:first-child .small{display:block}
+details.calc table.vv{font-size:14px}
+.vv-ok{color:var(--good);font-weight:600}
+.vv-atr{color:var(--warn);font-weight:600}
+.vv-canc{color:var(--bad);font-weight:600}
+#voo-a-voo>p{margin-bottom:10px}

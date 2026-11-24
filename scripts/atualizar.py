@@ -24,6 +24,8 @@ import requests
 RAIZ = Path(__file__).resolve().parent.parent
 MESES = RAIZ / "data" / "meses"
 DEBUG = RAIZ / "data" / "debug.json"
+# "Voo a voo": cada viagem de cada voo no mês mais recente (só o último mês, para o arquivo não crescer)
+DIARIO = RAIZ / "data" / "voo_a_voo.json"
 URL = "https://siros.anac.gov.br/siros/registros/diversos/vra/{a}/VRA_{a}_{m:02d}.csv"
 UA = {"User-Agent": "Mozilla/5.0 (compatible; VooEmNumeros/1.0; +https://vooemnumeros.com.br)"}
 INICIO = (2024, 12)  # primeiro mês guardado (dá base de comparação para dezembro/2025)
@@ -65,11 +67,17 @@ def data_hora(s: str) -> dt.datetime | None:
         return None
 
 
+def hm(t: dt.datetime | None) -> str:
+    return t.strftime("%H:%M") if t else ""
+
+
 def brasil(desc: str) -> bool:
     return (desc or "").strip().upper().endswith("BRASIL")
 
 
-def resumir(bruto: bytes, chave_mes: str) -> tuple[dict, dict]:
+def resumir(bruto: bytes, chave_mes: str, diario: dict | None = None) -> tuple[dict, dict]:
+    """Resume o mês por voo. Se `diario` vier, também guarda nele cada viagem do mês:
+    "CIA|num|origem|destino" -> [[dia, partida prevista, partida real, chegada real, atraso na chegada (min), cancelado]]."""
     try:
         texto = bruto.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -133,7 +141,13 @@ def resumir(bruto: bytes, chave_mes: str) -> tuple[dict, dict]:
             pass
         dia = pp.strftime("%Y-%m-%d")
         sit = (x.get("Situação Voo") or "").strip().upper()
+        reg = None
+        if diario is not None and dia.startswith(chave_mes):
+            reg = [pp.day, hm(pp), "", "", None, 0]
+            diario.setdefault(f"{cia}|{num}|{o}|{d}", []).append(reg)
         if sit == "CANCELADO":
+            if reg:
+                reg[5] = 1
             v["canc"] += 1
             for arr in (dias[dia], dias_cia[cia][dia], aero_dia[o][dia]):
                 arr[0] += 1
@@ -152,6 +166,8 @@ def resumir(bruto: bytes, chave_mes: str) -> tuple[dict, dict]:
             dbg["atraso_absurdo"] += 1
             continue
         v["med"] += 1
+        if reg:
+            reg[2], reg[3], reg[4] = hm(pr), hm(cr), round(atraso)
         pontual = atraso <= 30
         # confere com a classificação da própria ANAC
         if sc:
@@ -208,11 +224,27 @@ def meses_ate_hoje():
             a, m = a + 1, 1
 
 
+def salvar_diario(chave: str, diario: dict) -> None:
+    for regs in diario.values():
+        regs.sort(key=lambda r: (r[0], r[1]))
+    DIARIO.write_text(json.dumps({"mes": chave, "voos": dict(sorted(diario.items()))},
+                                 ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    log(f"{chave}: voo a voo salvo ({len(diario)} voos)")
+
+
+def mes_do_diario() -> str | None:
+    try:
+        return json.loads(DIARIO.read_text(encoding="utf-8")).get("mes")
+    except (OSError, ValueError):
+        return None
+
+
 def main() -> int:
     MESES.mkdir(parents=True, exist_ok=True)
     forcar = os.environ.get("FORCAR") == "1"
     debug = {"execucao": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "meses": {}}
     novos = 0
+    diario_mes, diario = None, None
     for a, m in meses_ate_hoje():
         chave = f"{a}-{m:02d}"
         destino = MESES / f"{chave}.json"
@@ -223,7 +255,8 @@ def main() -> int:
         if bruto is None:
             log(f"{chave}: ainda não publicado pela ANAC")
             continue
-        resumo, dbg = resumir(bruto, chave)
+        dd = {}
+        resumo, dbg = resumir(bruto, chave, dd)
         if dbg.get("domesticos", 0) < 20000:
             raise RuntimeError(f"{chave}: poucos voos domésticos ({dbg.get('domesticos')}); arquivo suspeito")
         if dbg.get("diverge", 0) > 0.02 * max(1, dbg.get("confere", 0)):
@@ -232,6 +265,20 @@ def main() -> int:
         debug["meses"][chave] = dbg
         log(f"{chave}: {dbg.get('domesticos')} voos domésticos, {len(resumo['voos'])} voos distintos")
         novos += 1
+        diario_mes, diario = chave, dd
+    # voo a voo do mês mais recente salvo (baixa de novo se o arquivo ainda não existe)
+    salvos = sorted(p.stem for p in MESES.glob("*.json"))
+    if salvos:
+        ultimo = salvos[-1]
+        if diario_mes == ultimo:
+            salvar_diario(ultimo, diario)
+        elif mes_do_diario() != ultimo:
+            log(f"{ultimo}: baixando para o voo a voo…")
+            bruto = baixar(int(ultimo[:4]), int(ultimo[5:]))
+            if bruto:
+                dd = {}
+                resumir(bruto, ultimo, dd)
+                salvar_diario(ultimo, dd)
     debug["novos"] = novos
     DEBUG.write_text(json.dumps(debug, ensure_ascii=False, indent=1), encoding="utf-8")
     log(f"Meses novos: {novos}")

@@ -1121,6 +1121,74 @@ def botao_ao_vivo(c: str, n: str) -> str:
             f'rel="noopener nofollow">Acompanhe o voo {iata} {n} ↗</a>')
 
 
+DIARIO_ARQ = RAIZ / "data" / "voo_a_voo.json"
+SEM_CURTO = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+VOO_A_VOO_VISIVEIS = 7
+
+
+def carrega_diario() -> dict | None:
+    try:
+        return json.loads(DIARIO_ARQ.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _situacao(r) -> tuple[str, str]:
+    """(texto, classe) de uma viagem: [dia, prevista, saiu, chegou, atraso, cancelado]."""
+    if r[5]:
+        return "Cancelado", "vv-canc"
+    if r[4] is None:
+        return "Sem registro", ""
+    if r[4] <= 30:
+        return "No horário", "vv-ok"
+    return f"Atrasou {min_txt(r[4]).replace(' ', '&nbsp;')}", "vv-atr"
+
+
+def voo_a_voo(B, c: str, n: str, o: str, d: str, cod: str):
+    """Cartão com cada viagem do voo no mês mais recente publicado pela ANAC. Devolve (html, par de FAQ ou None)."""
+    D = getattr(B, "diario", None)
+    if not D:
+        return "", None
+    regs = D.get("voos", {}).get(f"{c}|{n}|{o}|{d}")
+    if not regs:
+        return "", None
+    mes = D["mes"]
+    ano, mm = int(mes[:4]), int(mes[5:])
+    mes_n = nome_mes(mes)
+    linhas = []
+    for r in sorted(regs, key=lambda r: (r[0], r[1]), reverse=True):
+        dia = dt.date(ano, mm, r[0])
+        txt, cls = _situacao(r)
+        linhas.append(f'<tr><td class="num">{r[0]:02d}/{mm:02d}<span class="small">{SEM_CURTO[dia.weekday()]}</span></td><td class="num">{esc(r[1])}</td>'
+                      f'<td class="num">{esc(r[2]) or "–"}</td><td class="num">{esc(r[3]) or "–"}</td><td class="{cls}">{txt}</td></tr>')
+    cab = ('<thead><tr><th scope="col">Dia</th><th scope="col">Previsto</th><th scope="col">Saiu</th>'
+           '<th scope="col">Chegou</th><th scope="col">Situação</th></tr></thead>')
+    tab = f'<div class="tw"><table class="vv" data-sem-export data-sem-compartilhar>{cab}<tbody>{"".join(linhas[:VOO_A_VOO_VISIVEIS])}</tbody></table></div>'
+    if len(linhas) > VOO_A_VOO_VISIVEIS:
+        tab += (f'<details class="calc"><summary>Ver os outros {len(linhas) - VOO_A_VOO_VISIVEIS} dias de {mes_n}</summary>'
+                f'<div class="tw"><table class="vv" data-sem-export data-sem-compartilhar>{cab}<tbody>{"".join(linhas[VOO_A_VOO_VISIVEIS:])}</tbody></table></div></details>')
+    ok = sum(1 for r in regs if not r[5] and r[4] is not None and r[4] <= 30)
+    atr = [r for r in regs if not r[5] and r[4] is not None and r[4] > 30]
+    canc = sum(1 for r in regs if r[5])
+    partes = [f"{ok} no horário"]
+    if atr:
+        partes.append(f"{len(atr)} com atraso de mais de 30 min")
+    if canc:
+        partes.append(f"{canc} cancelad{'a' if canc == 1 else 'as'}")
+    resumo = f"Em {mes_n} de {ano}, o {esc(cod)} tinha {len(regs)} {'viagem prevista' if len(regs) == 1 else 'viagens previstas'} de {esc(B.cod(o))} para {esc(B.cod(d))}: " + ", ".join(partes[:-1]) + (" e " if len(partes) > 1 else "") + partes[-1] + "."
+    pior = max(atr, key=lambda r: r[4]) if atr else None
+    if pior:
+        resumo += f" O maior atraso foi em {pior[0]:02d}/{mm:02d}: {min_txt(pior[4])} na chegada."
+    ao_vivo = botao_ao_vivo(c, n)
+    html = (f'<section class="card" id="voo-a-voo"><div class="card-head"><h2>Voo a voo em {mes_n}</h2>'
+            f'<span class="small">{esc(B.cod(o))} → {esc(B.cod(d))}</span></div><p>{resumo}</p>{tab}'
+            f'<p class="nota">Horários locais. "No horário" = chegou até 30 min depois do previsto. A ANAC publica cada mês com cerca de 2 meses de atraso, '
+            f'por isso {mes_n} é o mês mais recente.{" Para saber como está o voo hoje, use o botão de acompanhamento ao vivo." if ao_vivo else ""}</p></section>')
+    faq = (f"Quantas vezes o voo {cod} atrasou em {mes_n}?",
+           re.sub(r"<[^>]+>", "", resumo))
+    return html, faq
+
+
 def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
     c, n = k
     cod, cia = B.cod_voo(c, n), B.cia_nome(c)
@@ -1173,6 +1241,9 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
         lugar = ("o mais pontual" if pos == 1 else "o menos pontual" if pos == len(outros) else f"o {pos}º mais pontual")
         pares.append((f"O {cod} é um dos voos mais pontuais de {B.cod(o)} para {B.cod(d)}?",
                       f"Ele é {lugar} entre {len(outros)} voos diretos {B.cod(o)}–{B.cod(d)} com pelo menos 10 viagens nos últimos 3 meses."))
+    vv_html, vv_faq = voo_a_voo(B, c, n, o, d, cod)
+    if vv_faq:
+        pares.insert(1, vv_faq)
     faq, ld = faq_html(pares)
     corpo = f"""<section class="hero"><span class="kicker">Voo · {esc(cia)}</span><h1>Voo {esc(cod)}: {esc(trecho)}</h1>
 <p class="lead">Nos últimos 3 meses, o {esc(cod)}{f" (saída prevista às {hora0})" if hora0 else ""} chegou no horário em <strong>{pc(a.p_pont)}</strong> das viagens e foi cancelado em <strong>{pc(a.p_canc)}</strong> dos dias previstos.{rank_txt}</p>
@@ -1180,6 +1251,7 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 <div class="tiles">{tile("Chegou no horário", pc(a.p_pont), "até 30 min de atraso")}{tile("Cancelado", pc(a.p_canc), f"{nf(a.canc)} de {nf(a.prev)} previstos")}{tile("Atraso médio quando atrasa", min_txt(a.media_atr), "atrasos acima de 30 min")}{tile("Atrasos acima de 1 hora", pc(a.p_a60), f"{nf(a.b[1] + a.b[2] + a.b[3])} viagens")}</div>
 {linha_destino(B, d)}
 <section class="card"><div class="card-head"><h2>Trechos deste voo</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Trecho</th><th scope="col">Saída prevista</th><th scope="col">Avião</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelado</th><th scope="col" class="r">Previstos</th></tr></thead><tbody>{"".join(lin_l)}</tbody></table></div></section>
+{vv_html}
 {calc_atraso_voo(cod, a)}
 {f'<div class="btns" style="margin:0 0 16px">{botao_ao_vivo(c, n)}</div>' if botao_ao_vivo(c, n) else ""}
 {alt_html}
@@ -3524,6 +3596,7 @@ def main() -> int:
         print(f"Aviso: tarifas ignoradas ({e})")
         B.tar = None
     B.familia = carrega_familia(rede=os.environ.get("VOO_SEM_REDE") != "1")
+    B.diario = carrega_diario()
     if SAIDA.exists():
         shutil.rmtree(SAIDA)
     SAIDA.mkdir(parents=True)
