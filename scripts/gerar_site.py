@@ -1169,14 +1169,14 @@ def calc_atraso_voo(cod: str, a) -> str:
 
 
 
-def botao_ao_vivo(c: str, n: str) -> str:
-    """Abre o voo em tempo real no Flightradar24 (só para companhias com código IATA conhecido)."""
-    iata = CIAS.get(c, ("", "", ""))[1]
-    if not iata or not n.isdigit():
+def botao_ao_vivo(c: str, n: str, iata: str = "") -> str:
+    """Abre o voo em tempo real no Flightradar24, em outra aba (só para companhias com código IATA conhecido)."""
+    iata = iata or CIAS.get(c, ("", "", ""))[1]
+    if not iata or len(iata) != 2 or not n.isdigit():
         return ""
     fr = {"TAM": "jj"}.get(c, iata.lower())  # no Flightradar24 os voos da LATAM Brasil aparecem como JJ, e não LA
     return (f'<a class="btn" href="https://www.flightradar24.com/data/flights/{fr}{n}" target="_blank" '
-            f'rel="noopener nofollow">Acompanhe o voo {iata} {n} ↗</a>')
+            f'rel="noopener nofollow" data-goatcounter-click="acompanhe-voo">Acompanhe o voo {iata} {n} ao vivo ↗</a>')
 
 
 DIARIO_ARQ = RAIZ / "data" / "voo_a_voo.json"
@@ -1304,13 +1304,12 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
         pares.insert(1, vv_faq)
     faq, ld = faq_html(pares)
     corpo = f"""<section class="hero"><span class="kicker">Voo · {esc(cia)}</span><h1>Voo {esc(cod)}: {esc(trecho)}</h1>
-<p class="lead">Nos últimos 3 meses, o {esc(cod)}{f" (saída prevista às {hora0})" if hora0 else ""} chegou no horário em <strong>{pc(a.p_pont)}</strong> das viagens e foi cancelado em <strong>{pc(a.p_canc)}</strong> dos dias previstos.{rank_txt}</p>
-<div class="btns"><a class="btn" href="#atrasou">Seu voo atrasou?</a>{B.link_rota(o, d, "Ver a rota " + esc(B.cod(o)) + " → " + esc(B.cod(d))).replace("<a ", '<a class="btn sec" ', 1) if (o, d) in B.pag_rotas else ""}</div></section>
+{'<p class="lead">Para ver onde o avião está agora, toque em <b>Acompanhe o voo</b> (abre o mapa ao vivo em outra aba). Abaixo, o histórico: n' if botao_ao_vivo(c, n) else '<p class="lead">N'}os últimos 3 meses, o {esc(cod)}{f" (saída prevista às {hora0})" if hora0 else ""} chegou no horário em <strong>{pc(a.p_pont)}</strong> das viagens e foi cancelado em <strong>{pc(a.p_canc)}</strong> dos dias previstos.{rank_txt}</p>
+<div class="btns">{botao_ao_vivo(c, n)}<a class="btn{" sec" if botao_ao_vivo(c, n) else ""}" href="#atrasou">Seu voo atrasou?</a>{B.link_rota(o, d, "Ver a rota " + esc(B.cod(o)) + " → " + esc(B.cod(d))).replace("<a ", '<a class="btn sec" ', 1) if (o, d) in B.pag_rotas else ""}</div></section>
 <div class="tiles">{tile("Chegou no horário", pc(a.p_pont), "até 30 min de atraso")}{tile("Cancelado", pc(a.p_canc), f"{nf(a.canc)} de {nf(a.prev)} previstos")}{tile("Atraso médio quando atrasa", min_txt(a.media_atr), "atrasos acima de 30 min")}{tile("Atrasos acima de 1 hora", pc(a.p_a60), f"{nf(a.b[1] + a.b[2] + a.b[3])} viagens")}</div>
 <section class="card"><div class="card-head"><h2>Trechos deste voo</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Trecho</th><th scope="col">Saída prevista</th><th scope="col">Avião</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelado</th><th scope="col" class="r">Previstos</th></tr></thead><tbody>{"".join(lin_l)}</tbody></table></div></section>
 {vv_html}
 {calc_atraso_voo(cod, a)}
-{f'<div class="btns" style="margin:0 0 16px">{botao_ao_vivo(c, n)}</div>' if botao_ao_vivo(c, n) else ""}
 {alt_html}
 {preco_card_voo(B, o, d)}
 <div class="grid2">
@@ -1321,9 +1320,11 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 {linha_destino(B, d)}
 {faq}"""
     # título no formato da busca ("ad 4942", "voo 2914 azul"): quem procura quer saber horário e se o voo atrasa
-    return pagina(B, f"/voos/{B.voo_slug(c, n)}/", f"Voo {cod} {cia} ({trecho}): horário e atrasos, {pc(a.p_pont)} no horário",
-                  f"O voo {cod} da {cia} ({trecho}){f' sai às {hora0}' if hora0 else ''} e chegou no horário em {pc(a.p_pont)} das vezes "
-                  f"nos últimos 3 meses, com {pc(a.p_canc)} de cancelamentos. Veja o atraso médio, o histórico e o status ao vivo.",
+    return pagina(B, f"/voos/{B.voo_slug(c, n)}/", (f"Voo {cod.replace(' ', '')} {cia}: acompanhe o voo e veja os atrasos ({B.cod(o)} → {B.cod(d)})" if botao_ao_vivo(c, n)
+                   else f"Voo {cod} {cia} ({trecho}): horário e atrasos, {pc(a.p_pont)} no horário"),
+                  (f"Acompanhe o voo {cod.replace(' ', '')} ({cod}) da {cia} ao vivo no mapa e veja o histórico: " if botao_ao_vivo(c, n) else f"O voo {cod} da {cia}: ")
+                  + f"chegou no horário em {pc(a.p_pont)} das vezes nos últimos 3 meses ({trecho}{f', saída às {hora0}' if hora0 else ''}), "
+                  f"com {pc(a.p_canc)} de cancelamentos.",
                   corpo, "/rotas/", migalhas=[("/companhias/" + B.cia_slug(c) + "/", cia), ("", f"Voo {cod}")], jsonld=[ld],
                   continuar=itens_cidade(B, d)[:2] + itens_cidade(B, o)[:1])
 
@@ -4210,14 +4211,15 @@ def pg_int_voo(BI: "BaseInt", k) -> str:
     lin_o = "".join(f'<tr><td>{BI.link_voo_int(kk)} <span class="small">{esc(BI.cia_nome(kk[0]))}</span></td><td class="r num"><b>{pc(x.p_pont)}</b></td></tr>'
                     for kk, x in outros if kk != k)
     hora0 = BI.voo_hora[(c, n, o, d)].most_common(1)[0][0] if BI.voo_hora[(c, n, o, d)] else ""
+    vivo = botao_ao_vivo(c, n, BI.pref(c))
     pares = [(f"O voo {cod} costuma atrasar?",
               f"Nos últimos 3 meses, o {cod} da {cia} chegou com até 30 minutos de atraso em {pc(a.p_pont)} das viagens e foi cancelado em {pc(a.p_canc)} das previstas."
               + (f" Quando atrasou mais de 30 minutos, o atraso médio foi de {min_txt(a.media_atr)}." if a.atr else "")),
              (f"Qual o trecho do voo {cod}?", f"O {cod} liga {trecho}" + (f", com saída mais frequente às {hora0} (horário da base da ANAC)." if hora0 else "."))]
     faq, ld = faq_html(pares)
     corpo = f"""<section class="hero"><span class="kicker">Voo internacional · {esc(cia)}</span><h1>Voo {esc(cod)}: {esc(trecho)}</h1>
-<p class="lead">Nos últimos 3 meses, o {esc(cod)} chegou no horário em <strong>{pc(a.p_pont)}</strong> das viagens e foi cancelado em <strong>{pc(a.p_canc)}</strong> das previstas.</p>
-<div class="btns">{BI.link_rota_int(o, d, "Ver a rota " + esc(BI.cod(o)) + " → " + esc(BI.cod(d))).replace("<a ", '<a class="btn sec" ', 1) if (o, d) in BI.pag_rotas else ""}<a class="btn sec" href="/internacionais/">Todos os voos internacionais</a></div></section>
+{'<p class="lead">Para ver onde o avião está agora, toque em <b>Acompanhe o voo</b> (abre o mapa ao vivo em outra aba). Abaixo, o histórico: n' if vivo else '<p class="lead">N'}os últimos 3 meses, o {esc(cod)} chegou no horário em <strong>{pc(a.p_pont)}</strong> das viagens e foi cancelado em <strong>{pc(a.p_canc)}</strong> das previstas.</p>
+<div class="btns">{vivo}{BI.link_rota_int(o, d, "Ver a rota " + esc(BI.cod(o)) + " → " + esc(BI.cod(d))).replace("<a ", '<a class="btn sec" ', 1) if (o, d) in BI.pag_rotas else ""}<a class="btn sec" href="/internacionais/">Todos os voos internacionais</a></div></section>
 <div class="tiles">{tile("Chegou no horário", pc(a.p_pont), "até 30 min de atraso")}{tile("Cancelado", pc(a.p_canc), f"{nf(a.canc)} de {nf(a.prev)} previstos")}{tile("Atraso médio quando atrasa", min_txt(a.media_atr), "atrasos acima de 30 min")}{tile("Atrasos acima de 1 hora", pc(a.p_a60), f"{nf(a.b[1] + a.b[2] + a.b[3])} viage{'m' if a.b[1] + a.b[2] + a.b[3] == 1 else 'ns'}")}</div>
 <section class="card"><div class="card-head"><h2>Trechos deste voo</h2><span class="small">Últimos 3 meses</span></div>
 <div class="tw"><table><thead><tr><th scope="col">Trecho</th><th scope="col" class="r">Saída</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_t}</tbody></table></div></section>
@@ -4228,8 +4230,8 @@ def pg_int_voo(BI: "BaseInt", k) -> str:
 <section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=list(BI.lista), aria=f"Percentual de viagens do voo {cod} no horário mês a mês")}</section>
 {int_aviso_direitos()}
 {faq}"""
-    return pagina(BI.dom, f"/internacionais/voos/{BI.voo_slug(c, n)}/", f"Voo {cod} {cia} ({trecho}): atrasos, {pc(a.p_pont)} no horário",
-                  f"O voo {cod} da {cia} ({trecho}) chegou no horário em {pc(a.p_pont)} das viagens nos últimos 3 meses. Atrasos, cancelamentos e mês a mês, com dados da ANAC.",
+    return pagina(BI.dom, f"/internacionais/voos/{BI.voo_slug(c, n)}/", (f"Voo {cod.replace(' ', '')} {cia}: acompanhe o voo e veja os atrasos ({BI.cod(o)} → {BI.cod(d)})" if vivo else f"Voo {cod} {cia} ({trecho}): atrasos, {pc(a.p_pont)} no horário"),
+                  ("Acompanhe ao vivo no mapa e veja o histórico. " if vivo else "") + f"O voo {cod} da {cia} ({trecho}) chegou no horário em {pc(a.p_pont)} das viagens nos últimos 3 meses. Atrasos, cancelamentos e mês a mês, com dados da ANAC.",
                   corpo, "/internacionais/", migalhas=[("/internacionais/", "Internacionais"), ("", f"Voo {cod}")], jsonld=[ld])
 
 
