@@ -107,6 +107,18 @@ jobs:
       - name: Publicar no GitHub Pages
         id: publicar
         if: always()
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      # o GitHub às vezes ainda não "enxerga" o pacote recém-enviado ("No artifacts named github-pages"):
+      # espera um pouco e tenta de novo, em vez de o site ficar sem publicar
+      - name: Esperar antes de tentar publicar de novo
+        if: always() && steps.publicar.outcome == 'failure'
+        run: sleep 45
+
+      - name: Publicar no GitHub Pages (segunda tentativa)
+        id: publicar2
+        if: always() && steps.publicar.outcome == 'failure'
         uses: actions/deploy-pages@v4
 
       - name: IndexNow, avisar o Bing das páginas que mudaram
