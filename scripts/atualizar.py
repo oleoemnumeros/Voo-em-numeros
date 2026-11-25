@@ -23,6 +23,8 @@ import requests
 
 RAIZ = Path(__file__).resolve().parent.parent
 MESES = RAIZ / "data" / "meses"
+# Voos internacionais regulares de passageiros (linha "I"), um arquivo por mês, no mesmo formato dos domésticos
+INTER = RAIZ / "data" / "internacional"
 DEBUG = RAIZ / "data" / "debug.json"
 # "Voo a voo": cada viagem de cada voo no mês mais recente (só o último mês, para o arquivo não crescer)
 DIARIO = RAIZ / "data" / "voo_a_voo.json"
@@ -32,6 +34,8 @@ INICIO = (2024, 12)  # primeiro mês guardado (dá base de comparação para dez
 
 # Empresas de carga que aparecem com linha doméstica "N"; ficam fora do site
 CARGUEIRAS = {"SID", "BPC", "MWM", "TTL", "LTG", "TPA", "LAE", "GEC", "CLX", "GTI", "LCO", "CMA", "QTR", "DHL", "FDX", "UPS"}
+# Cargueiras puras que aparecem em linha internacional mista ("I"); companhias de passageiros ficam
+CARGUEIRAS_INT = {"FDX", "UPS", "DHL", "GTI", "CLX", "LCO", "ABW", "CKS", "BOX", "GEC", "MPH", "TPA", "LTG", "AJT", "KYE", "SID", "BPC", "MWM", "TTL", "LAE", "CMA"}
 BUCKETS = {"Atraso 30-60": 0, "Atraso 60-120": 1, "Atraso 120-240": 2, "Atraso > 240": 3}
 
 
@@ -75,8 +79,8 @@ def brasil(desc: str) -> bool:
     return (desc or "").strip().upper().endswith("BRASIL")
 
 
-def resumir(bruto: bytes, chave_mes: str, diario: dict | None = None) -> tuple[dict, dict]:
-    """Resume o mês por voo. Se `diario` vier, também guarda nele cada viagem do mês:
+def resumir(bruto: bytes, chave_mes: str, diario: dict | None = None, tipo: str = "N") -> tuple[dict, dict]:
+    """Resume o mês por voo (tipo "N": domésticos; "I": internacionais, com uma ponta no Brasil). Se `diario` vier, também guarda nele cada viagem do mês:
     "CIA|num|origem|destino" -> [[dia, partida prevista, partida real, chegada real, atraso na chegada (min), cancelado]]."""
     try:
         texto = bruto.decode("utf-8-sig")
@@ -103,16 +107,17 @@ def resumir(bruto: bytes, chave_mes: str, diario: dict | None = None) -> tuple[d
 
     for x in leitor:
         dbg["linhas"] += 1
-        if (x.get("Código Tipo Linha") or "").strip() != "N":
+        if (x.get("Código Tipo Linha") or "").strip() != tipo:
             continue
         cia = (x.get("Sigla ICAO Empresa Aérea") or "").strip()
         o = (x.get("Sigla ICAO Aeroporto Origem") or "").strip()
         d = (x.get("Sigla ICAO Aeroporto Destino") or "").strip()
-        if not cia or cia in CARGUEIRAS or "CARG" in (x.get("Empresa Aérea") or "").upper():
+        if not cia or cia in (CARGUEIRAS if tipo == "N" else CARGUEIRAS_INT) or "CARG" in (x.get("Empresa Aérea") or "").upper():
             dbg["carga"] += 1
             continue
-        if not (brasil(x.get("Descrição Aeroporto Origem")) and brasil(x.get("Descrição Aeroporto Destino"))):
-            dbg["fora_do_brasil"] += 1
+        b_o, b_d = brasil(x.get("Descrição Aeroporto Origem")), brasil(x.get("Descrição Aeroporto Destino"))
+        if (tipo == "N" and not (b_o and b_d)) or (tipo != "N" and b_o == b_d):
+            dbg["fora_do_brasil" if tipo == "N" else "sem_ponta_no_brasil"] += 1
             continue
         pp = data_hora(x.get("Partida Prevista"))
         cp = data_hora(x.get("Chegada Prevista"))
@@ -121,7 +126,7 @@ def resumir(bruto: bytes, chave_mes: str, diario: dict | None = None) -> tuple[d
             continue
         if pp.strftime("%Y-%m") != chave_mes:
             dbg["outro_mes"] += 1
-        dbg["domesticos"] += 1
+        dbg["domesticos" if tipo == "N" else "internacionais"] += 1
         cias[cia] = (x.get("Empresa Aérea") or cia).strip()
         aeros.setdefault(o, (x.get("Descrição Aeroporto Origem") or "").strip())
         aeros.setdefault(d, (x.get("Descrição Aeroporto Destino") or "").strip())
@@ -245,27 +250,44 @@ def main() -> int:
     debug = {"execucao": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "meses": {}}
     novos = 0
     diario_mes, diario = None, None
+    INTER.mkdir(parents=True, exist_ok=True)
     for a, m in meses_ate_hoje():
         chave = f"{a}-{m:02d}"
         destino = MESES / f"{chave}.json"
-        if destino.exists() and not forcar:
+        dest_int = INTER / f"{chave}.json"
+        falta_dom = forcar or not destino.exists()
+        falta_int = forcar or not dest_int.exists()
+        if not falta_dom and not falta_int:
             continue
         log(f"{chave}: baixando…")
         bruto = baixar(a, m)
         if bruto is None:
             log(f"{chave}: ainda não publicado pela ANAC")
             continue
-        dd = {}
-        resumo, dbg = resumir(bruto, chave, dd)
-        if dbg.get("domesticos", 0) < 20000:
-            raise RuntimeError(f"{chave}: poucos voos domésticos ({dbg.get('domesticos')}); arquivo suspeito")
-        if dbg.get("diverge", 0) > 0.02 * max(1, dbg.get("confere", 0)):
-            raise RuntimeError(f"{chave}: classificação de pontualidade diverge da ANAC ({dbg})")
-        destino.write_text(json.dumps(resumo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-        debug["meses"][chave] = dbg
-        log(f"{chave}: {dbg.get('domesticos')} voos domésticos, {len(resumo['voos'])} voos distintos")
-        novos += 1
-        diario_mes, diario = chave, dd
+        if falta_dom:
+            dd = {}
+            resumo, dbg = resumir(bruto, chave, dd)
+            if dbg.get("domesticos", 0) < 20000:
+                raise RuntimeError(f"{chave}: poucos voos domésticos ({dbg.get('domesticos')}); arquivo suspeito")
+            if dbg.get("diverge", 0) > 0.02 * max(1, dbg.get("confere", 0)):
+                raise RuntimeError(f"{chave}: classificação de pontualidade diverge da ANAC ({dbg})")
+            destino.write_text(json.dumps(resumo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+            debug["meses"][chave] = dbg
+            log(f"{chave}: {dbg.get('domesticos')} voos domésticos, {len(resumo['voos'])} voos distintos")
+            novos += 1
+            diario_mes, diario = chave, dd
+        if falta_int:
+            # internacional é um extra: se o mês vier estranho, fica sem o arquivo e o site segue sem ele
+            try:
+                ri, di = resumir(bruto, chave, None, tipo="I")
+                if di.get("internacionais", 0) < 1500:
+                    log(f"{chave}: poucos voos internacionais ({di.get('internacionais')}); não salvei")
+                else:
+                    dest_int.write_text(json.dumps(ri, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+                    debug.setdefault("internacional", {})[chave] = di
+                    log(f"{chave}: {di.get('internacionais')} voos internacionais, {len(ri['voos'])} voos distintos")
+            except Exception as e:  # noqa: BLE001
+                log(f"{chave}: internacionais não processados ({e})")
     # voo a voo do mês mais recente salvo (baixa de novo se o arquivo ainda não existe)
     salvos = sorted(p.stem for p in MESES.glob("*.json"))
     if salvos:
