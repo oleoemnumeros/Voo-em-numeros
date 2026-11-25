@@ -570,6 +570,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <script src="/assets/familia.js?v={v}" defer></script>
 <script src="/assets/familia-graficos.js?v={v}" defer></script>
 <script src="/assets/precos.js?v={v}" defer></script>
+<script src="/assets/rota.js?v={v}" defer></script>
 <script src="/assets/familia-compartilhar.js?v={v}" defer></script>
 <script src="/assets/familia-busca.js?v={v}" data-indice="/busca-geral.json?v={v}" data-dica="Voo (LA 3300), rota (GRU SSA), cidade ou aeroporto" defer></script>
 {GOAT}
@@ -722,6 +723,7 @@ def pg_inicio(B: Base, cias_rank, aero_pag, rota_pag, voo_pag, fim) -> str:
 <p class="lead">{lead}</p>
 <div class="busca" role="search"><label for="busca" class="sr">Buscar voo, rota, aeroporto ou companhia</label>
 <input id="busca" type="search" autocomplete="off" placeholder="Voo (LA 3300), rota (GRU SSA), cidade ou aeroporto"><div id="busca-res" aria-live="polite"></div></div>
+{seletor_rota(B, rota_pag)}
 </section>
 {fim_card(B, fim)}
 {resumo_card_home(B)}
@@ -936,6 +938,24 @@ def pg_aero(B: Base, o: str, rota_pag, voo_pag) -> str:
                   continuar=itens_cidade(B, o))
 
 
+def seletor_rota(B: Base, rota_pag) -> str:
+    """Duas listas, "De" e "Para", que levam à página da rota (aparece só com JavaScript)."""
+    aeros = {x for r in rota_pag for x in r}
+    def _rot(a):
+        nm = B.aero_nome(a)  # "São Paulo (Congonhas)" vira "São Paulo – Congonhas (CGH)"
+        if nm.endswith(")") and " (" in nm:
+            nm = nm[:-1].replace(" (", " – ", 1)
+        return f"{nm} ({B.cod(a)})"
+    rotulo = {a: _rot(a) for a in aeros}
+    rotas = {}
+    for o, d in rota_pag:
+        rotas.setdefault(o, []).append([d, B.rota_slug(o, d)])
+    dados = html.escape(json.dumps({"a": rotulo, "r": rotas}, ensure_ascii=False, separators=(",", ":")), quote=True)
+    return (f'<div class="rs" data-rotas="{dados}" hidden><label>De<select class="rs-de"></select></label>'
+            '<label>Para<select class="rs-para" disabled></select></label>'
+            '<button type="button" class="btn rs-ir" disabled>Ver a rota</button></div>')
+
+
 def pg_rotas(B: Base, rota_pag) -> str:
     rs = sorted(rota_pag, key=lambda r: -B.soma(B.rota, r, B.u3).prev)
     lin = "".join(f'<tr><td class="wrap"><a href="/rotas/{B.rota_slug(o, d)}/">{esc(B.cod(o))} → {esc(B.cod(d))}</a> '
@@ -943,7 +963,8 @@ def pg_rotas(B: Base, rota_pag) -> str:
                   f'<td class="r num"><b>{pc(x.p_pont)}</b></td><td class="r num">{pc(x.p_canc)}</td><td class="r num">{nf(x.prev)}</td></tr>'
                   for (o, d), x in ((r, B.soma(B.rota, r, B.u3)) for r in rs[:200]))
     corpo = f"""<section class="hero"><h1>Rotas</h1>
-<p class="lead">As 200 rotas domésticas com mais voos nos últimos 3 meses. Use a busca para achar qualquer uma das {nf(len(rota_pag))} rotas, ou entre pela página do aeroporto de origem.</p>
+<p class="lead">Escolha a origem e o destino para ver a pontualidade e o preço de qualquer uma das {nf(len(rota_pag))} rotas diretas. Abaixo, as 200 com mais voos nos últimos 3 meses.</p>
+{seletor_rota(B, rota_pag)}
 <div class="busca" role="search"><label for="busca" class="sr">Buscar rota</label><input id="busca" type="search" autocomplete="off" placeholder="Ex.: GRU SSA, Recife, Congonhas"><div id="busca-res" aria-live="polite"></div></div></section>
 <section class="card"><div class="tw"><table><thead><tr><th scope="col">Rota</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos (3 meses)</th></tr></thead><tbody>{lin}</tbody></table></div></section>"""
     return pagina(B, "/rotas/", "Rotas aéreas no Brasil: atrasos e cancelamentos | Voo em Números",
@@ -4005,6 +4026,7 @@ def main() -> int:
     shutil.copy(SITE / "familia.js", SAIDA / "assets" / "familia.js")
     shutil.copy(SITE / "familia-graficos.js", SAIDA / "assets" / "familia-graficos.js")
     shutil.copy(SITE / "precos.js", SAIDA / "assets" / "precos.js")
+    shutil.copy(SITE / "rota.js", SAIDA / "assets" / "rota.js")
     shutil.copy(SITE / "familia-compartilhar.js", SAIDA / "assets" / "familia-compartilhar.js")
     shutil.copy(SITE / "familia-busca.js", SAIDA / "assets" / "familia-busca.js")
     (SAIDA / "favicon.svg").write_text(

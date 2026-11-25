@@ -294,3 +294,13 @@ table.qi tr.bom td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
 .qb b{text-align:right;font-weight:600}
 table.qo th{white-space:normal}table.qo td,table.qo th{padding:8px 6px}
 table.qo td.wrap{min-width:0}
+
+/* escolha de rota: De / Para */
+.rs{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;margin:14px 0 6px}
+.rs[hidden]{display:none}
+.rs label{display:flex;flex-direction:column;gap:4px;font-size:14px;font-weight:600;flex:1 1 200px}
+.rs select{font:inherit;font-size:17px;padding:11px 12px;border:2px solid #9AA6B2;border-radius:10px;background:#fff;color:var(--ink);width:100%}
+.rs select:disabled{opacity:.6}
+.rs select:focus{outline:3px solid #2A9DE0;outline-offset:1px}
+.rs .btn{flex:0 0 auto;padding:12px 20px}
+.rs .btn:disabled{opacity:.5;cursor:default}
