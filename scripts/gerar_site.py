@@ -492,7 +492,7 @@ def continue_padrao(caminho: str) -> list:
 ADS_HEAD = (f'<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-{ADSENSE_ID}" crossorigin="anonymous"></script>'
             if ADSENSE_ID else "")
 # menu enxuto (no celular só cabem 4 ou 5 itens): o resto fica no rodapé
-NAV = [("/", "Início"), ("/rotas/", "Rotas"), ("/precos/", "Preços"), ("/aeroportos/", "Aeroportos"), ("/companhias/", "Companhias"),
+NAV = [("/", "Início"), ("/resumo/", "Resumos"), ("/rotas/", "Rotas"), ("/precos/", "Preços"), ("/aeroportos/", "Aeroportos"), ("/companhias/", "Companhias"),
        ("/cidades/", "Cidades"), ("/rankings/", "Rankings"), ("/direitos/", "Seus direitos")]
 LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>')
