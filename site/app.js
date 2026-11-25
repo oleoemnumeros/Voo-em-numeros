@@ -24,3 +24,5 @@
   busca.addEventListener("focus",carrega);
   busca.addEventListener("input",function(){if(idx){roda();}else{carrega();}});
 })();
+/* menu: no celular, rola a lista até o item da página atual */
+(function(){var a=document.querySelector('.top nav a[aria-current="page"]');if(!a)return;var n=a.parentElement;if(n&&n.scrollWidth>n.clientWidth){n.scrollLeft=Math.max(0,a.offsetLeft-n.clientWidth/2+a.offsetWidth/2);}})();

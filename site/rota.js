@@ -12,7 +12,7 @@
     function enche() {
       para.innerHTML = "";
       var lst = d.r[de.value] || [];
-      opt(para, de.value ? "Escolha o destino" : "Escolha primeiro a origem", "");
+      opt(para, de.value ? "Escolha o destino" : "Escolha a origem antes", "");
       lst.slice().sort(function (x, y) { return ord(x[0], y[0]); }).forEach(function (x) { opt(para, d.a[x[0]], x[1]); });
       para.disabled = !de.value;
       ir.disabled = true;

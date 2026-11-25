@@ -491,10 +491,41 @@ def continue_padrao(caminho: str) -> list:
 # Ordem padrão da Família em Números: Início, Resumos, temas do portal, lugares, guias, Como funciona
 ADS_HEAD = (f'<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-{ADSENSE_ID}" crossorigin="anonymous"></script>'
             if ADSENSE_ID else "")
-NAV = [("/", "Início"), ("/resumo/", "Resumos"), ("/rankings/", "Rankings"), ("/companhias/", "Companhias"), ("/rotas/", "Rotas"), ("/precos/", "Preços"), ("/demanda/", "Passageiros"),
-       ("/aeroportos/", "Aeroportos"), ("/cidades/", "Cidades"), ("/quando-ir/", "Quando ir"), ("/mapa/", "Mapa"), ("/direitos/", "Seus direitos"), ("/fim-de-ano/", "Fim de ano"), ("/sobre/", "Como funciona")]
+# menu enxuto (no celular só cabem 4 ou 5 itens): o resto fica no rodapé
+NAV = [("/", "Início"), ("/rotas/", "Rotas"), ("/precos/", "Preços"), ("/aeroportos/", "Aeroportos"), ("/companhias/", "Companhias"),
+       ("/cidades/", "Cidades"), ("/rankings/", "Rankings"), ("/direitos/", "Seus direitos")]
 LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>')
+
+
+ATALHOS = [("Quanto custa", "Preço"), ("Voo a voo", "Dia a dia"), ("Seu voo atrasou?", "Seus direitos"), ("Quanto ele atrasa", "Atrasos"),
+           ("Outros voos", "Outros voos"), ("Passageiros", "Passageiros"), ("companhia", "Companhias"), ("Os voos desta", "Voos"),
+           ("Voos que mais atrasam", "Voos"), ("Melhor horário", "Horários"), ("Destinos", "Destinos"), ("Mês a mês", "Mês a mês"),
+           ("Outras rotas saindo", "Outras rotas"), ("Rotas", "Rotas"), ("Aeroportos", "Aeroportos"), ("Perguntas", "Perguntas")]
+
+
+def com_atalhos(corpo: str, caminho: str) -> str:
+    """Páginas longas ganham, logo depois do topo, uma fila de atalhos para as seções ("Nesta página")."""
+    if not caminho.startswith(("/rotas/", "/voos/", "/aeroportos/", "/trajetos/", "/cidades/", "/companhias/", "/estados/")) or caminho.count("/") < 3:
+        return corpo
+    itens, usados, n = [], set(), [0]
+
+    def troca(m):
+        txt = re.sub(r"<[^>]+>", "", m.group(2))
+        for chave, rot in ATALHOS:
+            if chave.lower() in txt.lower() and rot not in usados:
+                usados.add(rot)
+                n[0] += 1
+                ide = f"s{n[0]}"
+                itens.append(f'<a href="#{ide}">{rot}</a>')
+                return f'<h2{m.group(1)} id="{ide}">{m.group(2)}</h2>'
+        return m.group(0)
+    novo = re.sub(r'<h2((?:(?!id=)[^>])*)>(.*?)</h2>', troca, corpo)
+    if len(itens) < 4:
+        return corpo
+    fila = f'<nav class="atalhos" aria-label="Nesta página"><span>Nesta página</span>{"".join(itens)}</nav>'
+    i = novo.find("</section>")
+    return novo[:i + 10] + "\n" + fila + novo[i + 10:] if i >= 0 else novo
 
 
 def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo: str = "",
@@ -505,6 +536,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
     cont = [c for c in list(continuar or []) + continue_padrao(caminho) if c[0] != ESTE or c[1] in B.fixas or c[1].startswith(("/aeroportos/", "/rotas/", "/voos/", "/companhias/"))]
     cont = [c for c in cont if c[1] != caminho]
     cont_html = continue_html(cont)
+    corpo = com_atalhos(corpo, caminho)
     # o Google corta títulos acima de ~60 caracteres: tira a marca da <title> quando passa disso
     titulo_tag = titulo[:-len(" | Voo em Números")] if len(titulo) > 62 and titulo.endswith(" | Voo em Números") else titulo
     if len(titulo_tag) > 62:
@@ -564,7 +596,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <footer><div>
 <span><strong>Voo em Números</strong> · versão beta</span>
 <span>Voos domésticos regulares de passageiros. No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Cancelados contam sobre os voos previstos.</span>
-<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/cidades/">Cidades</a> · <a href="/rankings/">Rankings</a> · <a href="/rotas/">Rotas</a> · <a href="/precos/">Preços</a> · <a href="/mapa/">Mapa</a> · <a href="/resumo/">Resumos</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a> · <a href="/contato/">Contato</a> · <a href="/privacidade/">Privacidade</a></span>
+<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/cidades/">Cidades</a> · <a href="/rankings/">Rankings</a> · <a href="/rotas/">Rotas</a> · <a href="/precos/">Preços</a> · <a href="/quando-ir/">Quando ir</a> · <a href="/mapa/">Mapa</a> · <a href="/resumo/">Resumos</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a> · <a href="/contato/">Contato</a> · <a href="/privacidade/">Privacidade</a></span>
 </div>{familia_html()}</footer>
 <script src="/assets/app.js?v={v}" defer></script>
 <script src="/assets/familia.js?v={v}" defer></script>
@@ -1073,7 +1105,7 @@ def pg_rota(B: Base, o: str, d: str, rota_pag, voo_pag) -> str:
         rel_html += f'<section class="card"><h2>Outras rotas chegando a {esc(B.cidade(d))} ({esc(cd)})</h2><div class="btns">{_links(outras_d, lambda k: " · " + esc(B.cidade(k[0])))}</div></section>'
     corpo = f"""<section class="hero"><span class="kicker">Rota · voos diretos</span><h1>{esc(B.nome_cod(o))} → {esc(B.nome_cod(d))}</h1>
 <p class="lead">Em {base_txt}, <strong>{pc(a.p_pont)}</strong> dos voos chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados. {dur}</p>
-<div class="btns">{f'<a class="btn sec" href="/rotas/{B.rota_slug(d, o)}/">Ver a volta: {esc(cd)} → {esc(co)}</a>' if volta else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(o)}/">Aeroporto {esc(co)}</a>' if o in B.pag_aero else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(d)}/">Aeroporto {esc(cd)}</a>' if d in B.pag_aero else ""}{trajeto_btn(B, o, d)}{'<a class="btn" href="#preco">Preço da passagem</a>' if res_p else ""}</div></section>
+<div class="btns">{f'<a class="btn sec" href="/rotas/{B.rota_slug(d, o)}/">Ver a volta: {esc(cd)} → {esc(co)}</a>' if volta else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(o)}/">Aeroporto {esc(co)}</a>' if o in B.pag_aero else ""}{f'<a class="btn sec" href="/aeroportos/{B.aero_slug(d)}/">Aeroporto {esc(cd)}</a>' if d in B.pag_aero else ""}{trajeto_btn(B, o, d)}</div></section>
 {tiles_acc(a, a0)}
 {preco}
 {dem_rota(B, o, d)}
@@ -1274,7 +1306,6 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 <p class="lead">Nos últimos 3 meses, o {esc(cod)}{f" (saída prevista às {hora0})" if hora0 else ""} chegou no horário em <strong>{pc(a.p_pont)}</strong> das viagens e foi cancelado em <strong>{pc(a.p_canc)}</strong> dos dias previstos.{rank_txt}</p>
 <div class="btns"><a class="btn" href="#atrasou">Seu voo atrasou?</a>{B.link_rota(o, d, "Ver a rota " + esc(B.cod(o)) + " → " + esc(B.cod(d))).replace("<a ", '<a class="btn sec" ', 1) if (o, d) in B.pag_rotas else ""}</div></section>
 <div class="tiles">{tile("Chegou no horário", pc(a.p_pont), "até 30 min de atraso")}{tile("Cancelado", pc(a.p_canc), f"{nf(a.canc)} de {nf(a.prev)} previstos")}{tile("Atraso médio quando atrasa", min_txt(a.media_atr), "atrasos acima de 30 min")}{tile("Atrasos acima de 1 hora", pc(a.p_a60), f"{nf(a.b[1] + a.b[2] + a.b[3])} viagens")}</div>
-{linha_destino(B, d)}
 <section class="card"><div class="card-head"><h2>Trechos deste voo</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Trecho</th><th scope="col">Saída prevista</th><th scope="col">Avião</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelado</th><th scope="col" class="r">Previstos</th></tr></thead><tbody>{"".join(lin_l)}</tbody></table></div></section>
 {vv_html}
 {calc_atraso_voo(cod, a)}
@@ -1286,7 +1317,7 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 <section class="card"><div class="card-head"><h2>Outros voos {esc(B.cod(o))} → {esc(B.cod(d))}</h2><span class="small">Do mais ao menos pontual</span></div><div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Companhia</th><th scope="col">Saída</th><th scope="col" class="r">No horário</th></tr></thead><tbody>{lin_o}</tbody></table></div></section>
 </div>
 <section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria=f"Percentual de viagens do voo {cod} no horário mês a mês")}</section>
-{aviso_direitos()}
+{linha_destino(B, d)}
 {faq}"""
     # título no formato da busca ("ad 4942", "voo 2914 azul"): quem procura quer saber horário e se o voo atrasa
     return pagina(B, f"/voos/{B.voo_slug(c, n)}/", f"Voo {cod} {cia} ({trecho}): horário e atrasos, {pc(a.p_pont)} no horário",
@@ -2847,7 +2878,7 @@ def pg_trajeto(B: Base, so: str, sd: str, rota_pag) -> str:
     faq, ld = faq_html(pares)
     corpo = f"""<section class="hero"><span class="kicker">Trajeto entre cidades</span><h1>Voos de {esc(co["nome"])} para {esc(cd["nome"])}</h1>
 <p class="lead">Somando todos os aeroportos das duas cidades, em {base_txt}, <strong>{pc(a.p_pont)}</strong> dos voos chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados.</p>
-<div class="btns">{volta_html}<a class="btn sec" href="/cidades/{so}/">{esc(co["nome"])}</a><a class="btn sec" href="/cidades/{sd}/">{esc(cd["nome"])}</a>{'<a class="btn" href="#preco">Preço da passagem</a>' if res_p else ""}</div></section>
+<div class="btns">{volta_html}<a class="btn sec" href="/cidades/{so}/">{esc(co["nome"])}</a><a class="btn sec" href="/cidades/{sd}/">{esc(cd["nome"])}</a></div></section>
 {tiles_acc(a, a0)}
 {preco}
 {dem_soma_rotas(B, combos)}

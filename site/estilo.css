@@ -304,3 +304,11 @@ table.qo td.wrap{min-width:0}
 .rs select:focus{outline:3px solid #2A9DE0;outline-offset:1px}
 .rs .btn{flex:0 0 auto;padding:12px 20px}
 .rs .btn:disabled{opacity:.5;cursor:default}
+
+/* atalhos "Nesta página" e menu */
+.atalhos{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;margin:-4px 0 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.atalhos::-webkit-scrollbar{display:none}
+.atalhos span{flex:0 0 auto;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#5A6070;align-self:center}
+.atalhos a{flex:0 0 auto;padding:7px 12px;border:1px solid #C6D2DC;border-radius:999px;background:#fff;font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
+h2[id],section[id]{scroll-margin-top:96px}
+.rs .btn{flex:1 1 100%}
