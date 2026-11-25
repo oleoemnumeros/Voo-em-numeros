@@ -541,7 +541,10 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
     titulo_tag = titulo[:-len(" | Voo em Números")] if len(titulo) > 62 and titulo.endswith(" | Voo em Números") else titulo
     if len(titulo_tag) > 62:
         titulo_tag = titulo_tag.replace("atrasos e cancelamentos", "atrasos")
-    nav = "".join(f'<a href="{h}"' + (' aria-current="page"' if h == ativo else "") + f">{t}</a>" for h, t in NAV)
+    itens_nav = list(NAV)
+    if getattr(B, "inter", None):
+        itens_nav.insert([h for h, _ in itens_nav].index("/rotas/") + 1, ("/internacionais/", "Internacionais"))
+    nav = "".join(f'<a href="{h}"' + (' aria-current="page"' if h == ativo else "") + f">{t}</a>" for h, t in itens_nav)
     bc = ""
     lds = list(jsonld or [])
     if migalhas:
@@ -595,7 +598,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 </main>
 <footer><div>
 <span><strong>Voo em Números</strong> · versão beta</span>
-<span>Voos domésticos regulares de passageiros. No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Cancelados contam sobre os voos previstos.</span>
+<span>{"Voos internacionais regulares de passageiros entre o Brasil e o exterior" if caminho.startswith("/internacionais/") else "Voos domésticos regulares de passageiros"}. No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Cancelados contam sobre os voos previstos.</span>
 <span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/cidades/">Cidades</a> · <a href="/rankings/">Rankings</a> · <a href="/rotas/">Rotas</a> · {'<a href="/internacionais/">Internacionais</a> · ' if getattr(B, "inter", None) else ""}<a href="/precos/">Preços</a> · <a href="/quando-ir/">Quando ir</a> · <a href="/mapa/">Mapa</a> · <a href="/resumo/">Resumos</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a> · <a href="/contato/">Contato</a> · <a href="/privacidade/">Privacidade</a></span>
 </div>{familia_html()}</footer>
 <script src="/assets/app.js?v={v}" defer></script>
@@ -1276,7 +1279,7 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
                     f'<td>{esc(B.cia_nome(kk[0]))}</td><td class="num">{esc(h)}</td><td class="r num"><b>{pc(x.p_pont)}</b></td></tr>' for kk, x, h in outros[:15])
     dist = [("Até 30 min (no horário)", a.pont), ("30 a 60 min", a.b[0]), ("1 a 2 horas", a.b[1]), ("2 a 4 horas", a.b[2]), ("Mais de 4 horas", a.b[3])]
     dist_html = "".join(f'<div style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;font-size:14px">'
-                        f'<span>{nome}</span><span class="num">{nf(q)} voos</span></div>{meter(q / a.med if a.med else None, ruim=i > 0)}</div>'
+                        f'<span>{nome}</span><span class="num">{nf(q)} {"voo" if q == 1 else "voos"}</span></div>{meter(q / a.med if a.med else None, ruim=i > 0)}</div>'
                         for i, (nome, q) in enumerate(dist))
     hora0 = B.voo_hora[(c, n, o, d)].most_common(1)[0][0] if B.voo_hora[(c, n, o, d)] else ""
     rank_txt, alt_html = "", ""
@@ -3927,8 +3930,9 @@ NOMES_EXT = {
     "EDDF": "Frankfurt", "EDDM": "Munique", "EDDK": "Colônia", "EGLL": "Londres (Heathrow)", "EGSS": "Londres (Stansted)",
     "LTFM": "Istambul", "OMDB": "Dubai", "OMAA": "Abu Dhabi", "OTHH": "Doha", "HAAB": "Adis Abeba", "FAOR": "Joanesburgo",
     "FACT": "Cidade do Cabo", "HECA": "Cairo", "FNLU": "Luanda", "GMMN": "Casablanca", "GVAC": "Ilha do Sal", "GVPR": "Praia",
-    "DNMM": "Lagos", "DAAG": "Argel", "DTTA": "Túnis", "GOBD": "Dacar", "BIKF": "Reykjavík",
+    "DNMM": "Lagos", "MTCH": "Cap-Haïtien", "DAAG": "Argel", "DTTA": "Túnis", "GOBD": "Dacar", "BIKF": "Reykjavík",
 }
+IATA_EXT_FIXOS = {"GVPR": "RAI", "SAMU": "USP"}   # códigos que a ANAC usa diferente do cadastro mundial
 PAISES_CURTOS = {"ESTADOS UNIDOS DA AMÉRICA": "Estados Unidos", "HOLANDA": "Países Baixos"}
 CIAS_FORA_INT = {"KRE", "RZN", "UKL", "CRV"}   # carga ou fretamento que aparece em linha internacional mista
 MIN_INT_ROTA = 24      # voos previstos em 3 meses para a rota internacional ter página (2 por semana)
@@ -3951,10 +3955,48 @@ def carrega_int() -> dict:
     return meses
 
 
+def limpa_int(meses: dict):
+    """Tira dois artefatos da base internacional da ANAC:
+    1) trecho 100% cancelado no mês enquanto outro trecho do mesmo voo operou normalmente (o avião chegou, só não ficou registrado);
+    2) trecho sem nenhum voo realizado nos últimos 3 meses (rota suspensa: os "cancelamentos" são de voos que não estavam mais vendidos)."""
+    lista = sorted(meses)
+    u3 = lista[-3:]
+    ignorados, novos = [], {}
+    for m in lista:
+        por_voo = defaultdict(list)
+        for r in meses[m]["voos"]:
+            por_voo[(r[0], r[1])].append(r)
+        fica = []
+        for (c, n), rs in por_voo.items():
+            normal = any(x[5] and x[7] >= 0.5 * x[5] for x in rs)
+            for r in rs:
+                if normal and r[5] and r[6] == r[5] and r[7] == 0:
+                    ignorados.append((m, c, n, r[2], r[3], r[5]))
+                else:
+                    fica.append(r)
+        novos[m] = dict(meses[m], voos=fica)
+    # trechos sem nenhum voo realizado nos últimos 3 meses
+    real = defaultdict(int)
+    prev = defaultdict(int)
+    for m in u3:
+        for r in novos[m]["voos"]:
+            real[(r[0], r[1], r[2], r[3])] += r[7]
+            prev[(r[0], r[1], r[2], r[3])] += r[5]
+    mortos = {k for k in prev if prev[k] and not real[k]}
+    rota_real = defaultdict(int)
+    for k, v in real.items():
+        rota_real[(k[2], k[3])] += v
+    suspensas = sorted({(k[2], k[3]) for k in mortos if not rota_real[(k[2], k[3])]})
+    for m in u3:
+        novos[m] = dict(novos[m], voos=[r for r in novos[m]["voos"] if (r[0], r[1], r[2], r[3]) not in mortos])
+    return novos, ignorados, suspensas
+
+
 class BaseInt(Base):
     """Mesmos agregados dos domésticos, com nomes de aeroportos e companhias do exterior."""
 
     def __init__(self, meses: dict, dom: "Base"):
+        meses, self.ignorados, self.suspensas = limpa_int(meses)
         super().__init__(meses)
         self.dom = dom
         self.ext_aero = json.loads(EXT_AERO_ARQ.read_text(encoding="utf-8")) if EXT_AERO_ARQ.exists() else {}
@@ -3997,7 +4039,7 @@ class BaseInt(Base):
     def cod(self, icao: str) -> str:
         if icao in self.iata:
             return self.iata[icao]["iata"]
-        return self.ext_aero.get(icao, {}).get("iata", icao)
+        return IATA_EXT_FIXOS.get(icao) or self.ext_aero.get(icao, {}).get("iata", icao)
 
     def cia_nome(self, c: str) -> str:
         if c in CIAS:
@@ -4053,8 +4095,28 @@ def int_lin_rota(BI: "BaseInt", o, d, x, extra="") -> str:
             f'<td class="r num"><b>{pc(x.p_pont)}</b></td><td class="r num">{pc(x.p_canc)}</td><td class="r num">{nf(x.prev)}</td>{extra}</tr>')
 
 
+def int_nota_limpeza(BI, voo=None) -> str:
+    """Explica o que foi desconsiderado: trechos com cancelamento total "fantasma" e rotas suspensas."""
+    ign = [x for x in BI.ignorados if voo is None or (x[1], x[2]) == voo]
+    partes = []
+    if ign:
+        exemplos = defaultdict(list)
+        for m, c, n, o, d, _ in ign:
+            exemplos[(c, n, o, d)].append(mes_curto(m))
+        itens = [f"{BI.cod_voo(c, n)} {BI.aero_nome(o)} → {BI.aero_nome(d)} ({', '.join(ms)})" for (c, n, o, d), ms in list(exemplos.items())[:4]]
+        partes.append(("Deixamos de fora " + ("este trecho" if voo else f"{len(exemplos)} trecho{'s' if len(exemplos) > 1 else ''}")
+                       + ", que a ANAC registra como 100% cancelado no mês enquanto o restante do mesmo voo operou normalmente; "
+                       "é provável erro de registro, porque o avião precisa ter chegado para seguir viagem: " + "; ".join(itens) + "."))
+    if voo is None and BI.suspensas:
+        nomes = [f"{BI.aero_nome(o)} → {BI.aero_nome(d)}" for o, d in BI.suspensas[:8]]
+        partes.append("Rotas suspensas, sem nenhum voo realizado nos últimos 3 meses e fora das tabelas: " + "; ".join(nomes) + ".")
+    return "".join(f'<p class="nota">{esc(t)}</p>' for t in partes)
+
+
 def pg_internacionais(BI: "BaseInt") -> str:
     u3 = BI.u3
+    duv_c = {x[1] for x in BI.ignorados if x[0] in u3}            # companhias com registro incompleto no período
+    duv_v = {(x[1], x[2]) for x in BI.ignorados if x[0] in u3}
     a = BI.soma_tot(u3)
     am, am0 = BI.tot[BI.ref], BI.tot.get(BI.ant)
     mes = mes_nome(BI.ref)
@@ -4063,7 +4125,7 @@ def pg_internacionais(BI: "BaseInt") -> str:
     cias = [(c, BI.soma(BI.cia, c, u3)) for c in {c for m in u3 for c in BI.cia[m]}]
     cias = [t for t in cias if t[1].prev >= MIN_INT_RANK_CIA and t[1].med]
     cias.sort(key=lambda t: -(t[1].p_pont or 0))
-    lin_c = "".join(f'<tr><td>{i}º</td><td>{esc(BI.cia_nome(c))}</td><td style="min-width:150px">{meter(x.p_pont)}</td>'
+    lin_c = "".join(f'<tr><td>{i}º</td><td>{esc(BI.cia_nome(c))}{"*" if c in duv_c else ""}</td><td style="min-width:150px">{meter(x.p_pont)}</td>'
                     f'<td class="r num">{pc(x.p_canc)}</td><td class="r num">{nf(x.prev)}</td></tr>' for i, (c, x) in enumerate(cias, 1))
     rotas = sorted(BI.pag_rotas, key=lambda r: -BI.soma(BI.rota, r, u3).prev)
     lin_r = "".join(int_lin_rota(BI, o, d, BI.soma(BI.rota, (o, d), u3)) for o, d in rotas[:20])
@@ -4080,7 +4142,7 @@ def pg_internacionais(BI: "BaseInt") -> str:
     vs = [(k, soma_acc(BI.voo_legs[k].values())) for k in BI.pag_voos]
     vs = [t for t in vs if t[1].med >= 20]
     piores = sorted(vs, key=lambda t: (t[1].p_pont or 0))[:15]
-    lin_v = "".join(f'<tr><td>{BI.link_voo_int(k)}</td><td class="wrap small">{esc(BI.pag_voos[k])}</td><td class="r num"><b>{pc(x.p_pont)}</b></td>'
+    lin_v = "".join(f'<tr><td>{BI.link_voo_int(k)}{"*" if k in duv_v else ""}</td><td class="wrap small">{esc(BI.pag_voos[k])}</td><td class="r num"><b>{pc(x.p_pont)}</b></td>'
                     f'<td class="r num">{min_txt(x.media_atr)}</td></tr>' for k, x in piores)
     rotas_idx = {}
     for o, d in BI.pag_rotas:
@@ -4105,7 +4167,7 @@ def pg_internacionais(BI: "BaseInt") -> str:
 <section class="card"><h2>Pontualidade mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria="Percentual de voos internacionais no horário mês a mês")}</section>
 <section class="card"><div class="card-head"><h2>Companhias</h2><span class="small">Do mais ao menos pontual, últimos 3 meses</span></div>
 <div class="tw"><table><thead><tr><th scope="col">#</th><th scope="col">Companhia</th><th scope="col">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_c}</tbody></table></div>
-<p class="nota">Só companhias com pelo menos {nf(MIN_INT_RANK_CIA)} voos previstos em 3 meses.</p></section>
+<p class="nota">Só companhias com pelo menos {nf(MIN_INT_RANK_CIA)} voos previstos em 3 meses.{" * Registro incompleto na ANAC no período: trechos marcados como cancelados enquanto o mesmo voo seguiu viagem (ficaram de fora). Os atrasos dos trechos restantes podem refletir horário previsto desatualizado, e não a operação real." if duv_c else ""}</p></section>
 <section class="card"><div class="card-head"><h2>Rotas internacionais</h2><span class="small">As 20 com mais voos, últimos 3 meses</span></div>
 <div class="tw"><table><thead><tr><th scope="col">Rota</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_r}</tbody></table></div>
 {f'<details class="calc"><summary>Ver as outras {len(rotas) - 20} rotas</summary><div class="tw"><table><tbody>{lin_r2}</tbody></table></div></details>' if lin_r2 else ""}</section>
@@ -4113,9 +4175,10 @@ def pg_internacionais(BI: "BaseInt") -> str:
 <section class="card"><div class="card-head"><h2>Por país</h2><span class="small">Últimos 3 meses</span></div>
 <div class="tw"><table><thead><tr><th scope="col">País</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_p}</tbody></table></div></section>
 <section class="card"><div class="card-head"><h2>Voos que mais atrasam</h2><span class="small">Últimos 3 meses</span></div>
-<div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Trecho</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Atraso médio dos atrasados</th></tr></thead><tbody>{lin_v}</tbody></table></div></section>
+<div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Trecho</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Atraso médio dos atrasados</th></tr></thead><tbody>{lin_v}</tbody></table></div>{'<p class="nota">* Registro incompleto na ANAC; veja a nota abaixo.</p>' if any(k in duv_v for k, _ in piores) else ""}</section>
 </div>
 <p class="nota">No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Fonte: ANAC, base Voo Regular Ativo (VRA), linhas internacionais regulares; ficam de fora voos só de carga. Horários na base da ANAC.</p>
+{int_nota_limpeza(BI)}
 {int_aviso_direitos()}
 {faq}"""
     return pagina(BI.dom, "/internacionais/", f"Voos internacionais no Brasil: atrasos e cancelamentos em {mes_curto(BI.ref)} | Voo em Números",
@@ -4197,7 +4260,7 @@ def pg_int_voo(BI: "BaseInt", k) -> str:
                     f'<td class="r num"><b>{pc(x.p_pont)}</b></td><td class="r num">{nf(x.prev)}</td></tr>' for (oo, dd), x in principais)
     dist = [("No horário (até 30 min)", a.pont), ("De 30 min a 1 hora", a.b[0]), ("De 1 a 2 horas", a.b[1]), ("De 2 a 4 horas", a.b[2]), ("Mais de 4 horas", a.b[3])]
     dist_html = "".join(f'<div style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;font-size:14px">'
-                        f'<span>{nome}</span><span class="num">{nf(q)} voos</span></div>{meter(q / a.med if a.med else None, ruim=i > 0)}</div>'
+                        f'<span>{nome}</span><span class="num">{nf(q)} {"voo" if q == 1 else "voos"}</span></div>{meter(q / a.med if a.med else None, ruim=i > 0)}</div>'
                         for i, (nome, q) in enumerate(dist))
     serie_v = {m: BI.voo[m].get(k) for m in BI.lista}
     rot = [mes_curto(m) for m in BI.lista]
@@ -4228,6 +4291,7 @@ def pg_int_voo(BI: "BaseInt", k) -> str:
 {f'<section class="card"><div class="card-head"><h2>Outros voos {esc(BI.cod(o))} → {esc(BI.cod(d))}</h2><span class="small">Do mais ao menos pontual</span></div><div class="tw"><table><tbody>{lin_o}</tbody></table></div></section>' if lin_o else ""}
 </div>
 <section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=list(BI.lista), aria=f"Percentual de viagens do voo {cod} no horário mês a mês")}</section>
+{int_nota_limpeza(BI, k)}
 {int_aviso_direitos()}
 {faq}"""
     return pagina(BI.dom, f"/internacionais/voos/{BI.voo_slug(c, n)}/", (f"Voo {cod.replace(' ', '')} {cia}: acompanhe o voo e veja os atrasos ({BI.cod(o)} → {BI.cod(d)})" if vivo else f"Voo {cod} {cia} ({trecho}): atrasos, {pc(a.p_pont)} no horário"),
