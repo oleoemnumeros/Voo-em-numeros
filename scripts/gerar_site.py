@@ -2607,7 +2607,8 @@ def pg_quando(B: Base, s: str, rota_pag) -> str:
         fonte_cl = f"Clima: Normais Climatológicas 1991–2020 do Inmet, estação {esc(est)} (médias de 30 anos)."
     else:
         fonte_cl = ("Clima: médias de 2001–2020 do NASA POWER para a região do aeroporto, estimadas por satélite e modelo "
-                    "(a cidade não tem estação nas normais do Inmet); em serra e litoral pode haver diferença de alguns graus.")
+                    "(média das máximas e mínimas diárias). São valores aproximados, que servem para comparar os meses entre si: "
+                    "perto do mar e na serra a temperatura pode variar alguns graus e a chuva medida no local costuma ser maior.")
     notas = [fonte_cl]
     if "pax" in rot:
         notas.append(f"Passageiros: chegadas em voos domésticos regulares entre {mes_curto(rot['pax'][0])} e {mes_curto(rot['pax'][1])} (ANAC).")
