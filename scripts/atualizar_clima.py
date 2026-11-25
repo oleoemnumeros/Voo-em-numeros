@@ -40,10 +40,11 @@ INMET_CODIGOS = {
     "tmax": ["TMAX", "TEMPMAX", "TMAXMED", "TMAXIMA"],
     "tmin": ["TMIN", "TEMPMIN", "TMINMED", "TMINIMA"],
 }
-NASA = ("https://power.larc.nasa.gov/api/temporal/climatology/point"
-        "?parameters=T2M_MAX,T2M_MIN,PRECTOTCORR&community=AG&longitude={lon}&latitude={lat}&format=JSON")
-NASA_MESES = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
-DIAS_MES = [31, 28.25, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+# Série DIÁRIA 2001-2020: a "climatologia" pronta do NASA POWER traz os extremos do mês (o dia mais quente
+# e o mais frio), não a média das máximas e mínimas. Com os dias, a conta fica igual à das normais do Inmet.
+NASA = ("https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M_MAX,T2M_MIN,PRECTOTCORR"
+        "&community=AG&longitude={lon}&latitude={lat}&start=20010101&end=20201231&format=JSON")
+NASA_METODO = "diario-2001-2020"
 
 
 def log(*a):
@@ -164,20 +165,45 @@ def casa_estacao(tabelas: dict, cidade: str, uf: str):
     return res["tmax"][0], res["tmax"][1], res["tmin"][1], res["chuva"][1]
 
 
+def resume_diario(p: dict) -> dict:
+    """Média das máximas e das mínimas diárias por mês; chuva e dias de chuva (>= 1 mm) somados por mês e na média dos anos."""
+    from collections import defaultdict
+    mx, mn = defaultdict(list), defaultdict(list)
+    ch, dias = defaultdict(float), defaultdict(int)
+    anos = defaultdict(set)
+    for dia, v in p["T2M_MAX"].items():
+        m = int(dia[4:6]) - 1
+        if v is not None and v > -900:
+            mx[m].append(v)
+        w = p["T2M_MIN"].get(dia)
+        if w is not None and w > -900:
+            mn[m].append(w)
+        c = p["PRECTOTCORR"].get(dia)
+        if c is not None and c > -900:
+            ch[m] += c
+            dias[m] += c >= 1
+            anos[m].add(dia[:4])
+    def med(l):
+        return round(sum(l) / len(l), 1) if l else None
+    return {"tmax": [med(mx[m]) for m in range(12)], "tmin": [med(mn[m]) for m in range(12)],
+            "chuva": [round(ch[m] / len(anos[m])) if anos[m] else None for m in range(12)],
+            "dias_chuva": [round(dias[m] / len(anos[m])) if anos[m] else None for m in range(12)]}
+
+
 def nasa(lat: float, lon: float):
     r = baixar(NASA.format(lat=round(lat, 3), lon=round(lon, 3)))
     if r is None or r.status_code != 200:
         return None, (r.status_code if r is not None else "erro")
-    p = r.json()["properties"]["parameter"]
-    tmax = [round(p["T2M_MAX"][m], 1) for m in NASA_MESES]
-    tmin = [round(p["T2M_MIN"][m], 1) for m in NASA_MESES]
-    chuva = [round(p["PRECTOTCORR"][m] * d) for m, d in zip(NASA_MESES, DIAS_MES)]
-    return {"tmax": tmax, "tmin": tmin, "chuva": chuva}, 200
+    return resume_diario(r.json()["properties"]["parameter"]), 200
 
 
 def main() -> int:
     forcar = os.environ.get("FORCAR") == "1"
     atual = json.loads(SAIDA.read_text(encoding="utf-8")) if SAIDA.exists() else {"aeros": {}}
+    if atual.get("nasa_metodo") != NASA_METODO:  # dados da NASA calculados de outro jeito: refaz
+        for reg in atual["aeros"].values():
+            reg.pop("nasa", None)
+        atual["aeros"] = {a: r for a, r in atual["aeros"].items() if "inmet" in r}
     aeros = aeroportos()
     falta = [a for a in aeros if forcar or a not in atual["aeros"]]
     if not falta:
@@ -203,11 +229,12 @@ def main() -> int:
                 ok_nasa += 1
             else:
                 dbg.setdefault("nasa_erros", {})[a] = st
-            time.sleep(0.5)
+            time.sleep(1)
         if "inmet" in reg or "nasa" in reg:
             atual["aeros"][a] = reg
     atual["inmet_periodo"] = "1991-2020"
     atual["nasa_periodo"] = "2001-2020"
+    atual["nasa_metodo"] = NASA_METODO
     atual["baixado_em"] = dt.date.today().isoformat()
     dbg.update({"com_inmet": ok_inmet, "com_nasa": ok_nasa, "salvos": len(atual["aeros"])})
     SAIDA.write_text(json.dumps(atual, ensure_ascii=False, separators=(",", ":"), sort_keys=True), encoding="utf-8")
