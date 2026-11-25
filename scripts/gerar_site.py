@@ -433,14 +433,18 @@ def itens_cidade(B: Base, icao: str) -> list:
     return [(p, c, titulos[n], d) for n in ("economia", "comex", "oleo") if n in achados for (p, c, d) in [achados[n]]]
 
 
-def linha_destino(B: Base, d: str) -> str:
-    """Linha curta com a cidade de destino nos outros portais (só os que têm página da cidade)."""
+def linha_destino(B: Base, d: str, quando: bool = True) -> str:
+    """Linha curta com a cidade de destino: melhor época para ir (aqui) e a cidade nos outros portais."""
     achados = B.familia.get(chave_cidade(B.cidade(d), B.uf(d)), {})
-    if not achados:
+    sq = cid_slug(B, d)
+    tem_q = quando and sq in getattr(B, "quando", set())
+    if not achados and not tem_q:
         return ""
     cid = B.cidade(d)
     rot = {"economia": "População e economia", "comex": "O que a cidade exporta", "oleo": "Royalties de petróleo"}
     links = []
+    if tem_q:
+        links.append(f'<a href="/quando-ir/{sq}/" data-goatcounter-click="destino/quando-ir"><i style="background:var(--acc)"></i>Melhor época para ir</a>')
     for n in ("economia", "comex", "oleo"):
         if n in achados:
             portal, caminho, _ = achados[n]
@@ -488,7 +492,7 @@ def continue_padrao(caminho: str) -> list:
 ADS_HEAD = (f'<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-{ADSENSE_ID}" crossorigin="anonymous"></script>'
             if ADSENSE_ID else "")
 NAV = [("/", "Início"), ("/resumo/", "Resumos"), ("/rankings/", "Rankings"), ("/companhias/", "Companhias"), ("/rotas/", "Rotas"), ("/precos/", "Preços"), ("/demanda/", "Passageiros"),
-       ("/aeroportos/", "Aeroportos"), ("/cidades/", "Cidades"), ("/mapa/", "Mapa"), ("/direitos/", "Seus direitos"), ("/fim-de-ano/", "Fim de ano"), ("/sobre/", "Como funciona")]
+       ("/aeroportos/", "Aeroportos"), ("/cidades/", "Cidades"), ("/quando-ir/", "Quando ir"), ("/mapa/", "Mapa"), ("/direitos/", "Seus direitos"), ("/fim-de-ano/", "Fim de ano"), ("/sobre/", "Como funciona")]
 LOGO = ('<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#2A9DE0"/>'
         '<path d="M7 17.5 23 9.5l-3.2 9.3-4.3-2.6-2.9 3.8-.4-4.7z" fill="#fff"/><rect x="7" y="22" width="16" height="1.8" rx=".9" fill="#fff" opacity=".7"/></svg>')
 
@@ -2407,7 +2411,7 @@ def pg_cidade(B: Base, s: str, aero_pag, rota_pag, voo_pag) -> str:
     corpo = f"""<section class="hero"><span class="kicker">Cidade · {esc(UF_NOME.get(uf, uf))}</span><h1>Voos em {esc(nome)} ({esc(uf)}): atrasos e cancelamentos</h1>
 <p class="lead">Em {base_txt}, <strong>{pc(dep.p_pont)}</strong> dos voos que saíram de {esc(nome)} chegaram no horário e <strong>{pc(dep.p_canc)}</strong> foram cancelados.
 {f"Nos que chegaram à cidade, {pc(chg3.p_pont)} estavam no horário (últimos 3 meses)." if chg3.med >= 30 else ""}</p>
-<div class="btns">{aero_btns}{f'<a class="btn sec" href="/estados/{uf_slug(uf)}/">{esc(UF_NOME[uf])}</a>' if uf in B.pag_est else ""}</div></section>
+<div class="btns">{f'<a class="btn" href="/quando-ir/{s}/">Melhor época para ir a {esc(nome)}</a>' if s in B.quando else ""}{aero_btns}{f'<a class="btn sec" href="/estados/{uf_slug(uf)}/">{esc(UF_NOME[uf])}</a>' if uf in B.pag_est else ""}</div></section>
 {tiles_acc(dep, dep0, "Partidas previstas")}
 {dem_soma_aeros(B, aeros, nota=f"Passageiros pagos embarcados em {esc(nome)}, em voos domésticos regulares.")}
 <section class="card"><div class="card-head"><h2>Saindo e chegando</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Sentido</th><th scope="col">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Mais de 1 hora</th><th scope="col" class="r">Voos previstos</th></tr></thead><tbody>{lin_sc}</tbody></table></div>
@@ -2426,6 +2430,252 @@ def pg_cidade(B: Base, s: str, aero_pag, rota_pag, voo_pag) -> str:
                   f"{cap(base_txt)}: {pc(dep.p_pont)} dos voos que saíram de {nome} chegaram no horário e {pc(dep.p_canc)} foram cancelados. Destinos, companhias, melhor dia e horário.",
                   corpo, "/cidades/", migalhas=[("/cidades/", "Cidades"), ("", nome)], jsonld=[ld],
                   continuar=itens_cidade(B, aeros[0]))
+
+
+
+# ---------------------------------------------------------------- melhor época para ir
+CLIMA_ARQ = RAIZ / "data" / "clima.json"
+MES_ABR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+
+
+def carrega_clima() -> dict:
+    try:
+        return json.loads(CLIMA_ARQ.read_text(encoding="utf-8")).get("aeros", {})
+    except (OSError, ValueError):
+        return {}
+
+
+def clima_aeros(B: Base, aeros):
+    """Clima de uma cidade: estação do Inmet quando existe; senão NASA POWER do aeroporto mais movimentado."""
+    C = getattr(B, "clima", {}) or {}
+    ordem = sorted(aeros, key=lambda a: -(B.soma(B.chg, a, B.u3).prev))
+    for fonte in ("inmet", "nasa"):
+        for a in ordem:
+            reg = C.get(a, {}).get(fonte)
+            if not reg:
+                continue
+            nasa = C.get(a, {}).get("nasa", {})
+            out = {"fonte": fonte, "estacao": reg.get("estacao", "")}
+            for v in ("tmax", "tmin", "chuva"):
+                serie = list(reg[v])
+                # mês sem medição no Inmet: completa com a estimativa da NASA, se houver
+                serie = [x if x is not None else (nasa.get(v) or [None] * 12)[i] for i, x in enumerate(serie)]
+                if sum(x is None for x in serie) > 2:
+                    break
+                out[v] = serie
+            else:
+                return out
+    return None
+
+
+def quando_series(B: Base, aeros):
+    """Por mês do calendário (0 = janeiro): passagem média (R$, corrigida), passageiros que chegam e % no horário na chegada."""
+    S = set(aeros)
+    preco, pax, pont = [None] * 12, [None] * 12, [None] * 12
+    rot = {}
+    T = getattr(B, "tar", None)
+    if T:
+        meses_t = T.meses[-12:]
+        rot["preco"] = (meses_t[0], meses_t[-1])
+        tot = T.soma([k for k in T.rotas if k.split("-")[1] in S])
+        for m in meses_t:
+            if m in tot and tot[m][0] >= 30:
+                preco[int(m[5:]) - 1] = tot[m][1] / tot[m][0] * T.fator[m]
+    D = getattr(B, "dem", None)
+    if D:
+        meses_d = D.meses[-12:]
+        rot["pax"] = (meses_d[0], meses_d[-1])
+        for m in meses_d:
+            v = sum(x.pax for (o, d), x in D.rota[m].items() if d in S)
+            if v:
+                pax[int(m[5:]) - 1] = v
+    meses_v = B.lista[-12:]
+    rot["pont"] = (meses_v[0], meses_v[-1])
+    for m in meses_v:
+        a = Acc()
+        for x in aeros:
+            if x in B.chg[m]:
+                a.soma(B.chg[m][x])
+        if a.med >= 30:
+            pont[int(m[5:]) - 1] = a.p_pont
+    return preco, pax, pont, rot
+
+
+def _idx(vals, f):
+    ok = [(v, i) for i, v in enumerate(vals) if v is not None]
+    return f(ok)[1] if ok else None
+
+
+def _top(vals, n, maior=False):
+    ok = sorted(((v, i) for i, v in enumerate(vals) if v is not None), reverse=maior)
+    return {i for _, i in ok[:n]}
+
+
+def _lista_meses(idx) -> str:
+    nomes = [MESES[i] for i in sorted(idx)]
+    return nomes[0] if len(nomes) == 1 else ", ".join(nomes[:-1]) + " e " + nomes[-1]
+
+
+def quando_dados(B: Base, s: str):
+    c = B.cid[s]
+    cl = clima_aeros(B, c["aeros"])
+    if not cl:
+        return None
+    preco, pax, pont, rot = quando_series(B, c["aeros"])
+    chuva = cl["chuva"]
+    med_ch = sorted(x for x in chuva if x is not None)[len([x for x in chuva if x is not None]) // 2]
+    precos_ok = [p for p in preco if p is not None]
+    pax_ok = [p for p in pax if p]
+    med_x = sorted(pax_ok)[len(pax_ok) // 2] if len(pax_ok) >= 8 else None
+    # bons meses: menos chuva e menos movimento (fora da alta temporada) que a mediana do ano da própria cidade.
+    # A passagem não entra: a ANAC informa a tarifa pelo mês da COMPRA, não da viagem.
+    bons = [i for i in range(12) if chuva[i] is not None and chuva[i] <= med_ch
+            and (med_x is None or (pax[i] and pax[i] <= med_x))]
+    if not bons:
+        bons = sorted(_top(chuva, 3))
+    return {"c": c, "cl": cl, "preco": preco, "pax": pax, "pont": pont, "rot": rot, "bons": bons,
+            "seco": _idx(chuva, min), "chuvoso": _idx(chuva, max),
+            "quente": _idx(cl["tmax"], max), "frio": _idx(cl["tmin"], min),
+            "barato": _idx(preco, min) if len(precos_ok) >= 8 else None,
+            "caro": _idx(preco, max) if len(precos_ok) >= 8 else None,
+            "cheio": _idx(pax, max) if sum(p is not None for p in pax) >= 8 else None,
+            "vazio": _idx(pax, min) if sum(p is not None for p in pax) >= 8 else None}
+
+
+def quando_origens(B: Base, aeros, rota_pag, n=8):
+    """De onde mais se voa para a cidade, com passagem média de 12 meses e o mês mais barato de cada origem."""
+    T = getattr(B, "tar", None)
+    if not T:
+        return ""
+    S = set(aeros)
+    meses_t = T.meses[-12:]
+    linhas = []
+    for k, ser in T.rotas.items():
+        o, d = k.split("-")
+        if d not in S or B.cidade(o) == B.cidade(d):
+            continue
+        q = sum(ser[m][0] for m in meses_t if m in ser)
+        if q < 300:
+            continue
+        sv = sum(ser[m][1] * T.fator[m] for m in meses_t if m in ser)
+        mens = [(ser[m][1] / ser[m][0] * T.fator[m], m) for m in meses_t if m in ser and ser[m][0] >= 30]
+        mb = min(mens)[1] if len(mens) >= 8 else None
+        linhas.append((q, o, d, sv / q, mb))
+    linhas.sort(reverse=True)
+    if not linhas:
+        return ""
+    corpo = "".join(
+        f'<tr><td class="wrap">{B.link_rota(o, d, esc(B.cidade(o)) + " (" + esc(B.cod(o)) + ")") if (o, d) in rota_pag else esc(B.cidade(o)) + " (" + esc(B.cod(o)) + ")"}</td>'
+        f'<td class="r num"><b>{rs(p)}</b></td><td class="r">{MESES[int(mb[5:]) - 1] if mb else "–"}</td></tr>'
+        for q, o, d, p, mb in linhas[:n])
+    return corpo
+
+
+def pg_quando(B: Base, s: str, rota_pag) -> str:
+    q = quando_dados(B, s)
+    c, cl = q["c"], q["cl"]
+    nome, uf, aeros = c["nome"], c["uf"], c["aeros"]
+    tmax, tmin, chuva = cl["tmax"], cl["tmin"], cl["chuva"]
+    preco, pax, pont = q["preco"], q["pax"], q["pont"]
+    secos, chuvosos = _top(chuva, 3), _top(chuva, 3, True)
+    cheios = _top([p or None for p in pax], 3, True) if q["cheio"] is not None else set()
+    lin = []
+    for i in range(12):
+        ch_cls = "vv-ok" if i in secos else "vv-atr" if i in chuvosos else ""
+        t = f'<b>{nf(tmax[i])}°</b> / {nf(tmin[i])}°' if tmax[i] is not None and tmin[i] is not None else "–"
+        lin.append(f'<tr{" class=bom" if i in q["bons"] else ""}><td><b>{MES_ABR[i]}</b></td><td class="num">{t}</td>'
+                   f'<td class="num {ch_cls}">{nf(chuva[i]) + " mm" if chuva[i] is not None else "–"}</td>'
+                   f'<td class="num{" vv-atr" if i in cheios else ""}">{abrevia(pax[i]) if pax[i] else "–"}</td>'
+                   f'<td class="num">{pc(pont[i], 0) if pont[i] is not None else "–"}</td></tr>')
+    bons_txt = _lista_meses(q["bons"])
+    frases = [f"Pelos números, os meses que juntam menos chuva e menos movimento que a média do ano em {esc(nome)} são <strong>{bons_txt}</strong>."
+              if q["cheio"] is not None else f"Os meses com menos chuva em {esc(nome)} são <strong>{_lista_meses(secos)}</strong>."]
+    frases.append(f"O mais chuvoso é {MESES[q['chuvoso']]} ({nf(chuva[q['chuvoso']])} mm)"
+                  + (f" e o de mais passageiros chegando é {MESES[q['cheio']]}" if q["cheio"] is not None else "") + ".")
+    tiles = (tile("Mês mais seco", cap(MESES[q["seco"]]), f"{nf(chuva[q['seco']])} mm de chuva")
+             + tile("Mês mais chuvoso", cap(MESES[q["chuvoso"]]), f"{nf(chuva[q['chuvoso']])} mm de chuva")
+             + (tile("Mais movimentado", cap(MESES[q["cheio"]]), f"{abrevia(pax[q['cheio']])} passageiros chegando") if q["cheio"] is not None else
+                tile("Mês mais quente", cap(MESES[q["quente"]]), f"máxima média de {nf(tmax[q['quente']])}°"))
+             + (tile("Mais tranquilo", cap(MESES[q["vazio"]]), f"{abrevia(pax[q['vazio']])} passageiros chegando") if q["vazio"] is not None else
+                tile("Mês mais frio", cap(MESES[q["frio"]]), f"mínima média de {nf(tmin[q['frio']])}°")))
+    rot = q["rot"]
+    if cl["fonte"] == "inmet":
+        est = re.sub(r"\(([a-zà-ú])", lambda m: "(" + m.group(1).upper(), titulo_pt(cl["estacao"]))
+        fonte_cl = f"Clima: Normais Climatológicas 1991–2020 do Inmet, estação {esc(est)} (médias de 30 anos)."
+    else:
+        fonte_cl = ("Clima: médias de 2001–2020 do NASA POWER para a região do aeroporto, estimadas por satélite e modelo "
+                    "(a cidade não tem estação nas normais do Inmet); em serra e litoral pode haver diferença de alguns graus.")
+    notas = [fonte_cl]
+    if "pax" in rot:
+        notas.append(f"Passageiros: chegadas em voos domésticos regulares entre {mes_curto(rot['pax'][0])} e {mes_curto(rot['pax'][1])} (ANAC).")
+    notas.append(f"No horário: voos que chegaram a {esc(nome)} até 30 minutos depois do previsto, entre {mes_curto(rot['pont'][0])} e {mes_curto(rot['pont'][1])}. "
+                 "Em verde, os 3 meses de menos chuva; em laranja, os 3 de mais chuva e os 3 de mais passageiros (alta temporada). Linhas destacadas: menos chuva e menos movimento que a média do ano.")
+    compra_html = ""
+    if q["barato"] is not None:
+        mx = max(p for p in preco if p is not None)
+        barras = "".join(
+            f'<div class="qb"><span>{MES_ABR[i]}</span><i style="width:{(preco[i] / mx * 100) if preco[i] else 0:.0f}%" class="{"ok" if i == q["barato"] else "ruim" if i == q["caro"] else ""}"></i>'
+            f'<b class="num">{rs(preco[i]) if preco[i] is not None else "–"}</b></div>' for i in range(12))
+        compra_html = (f'<section class="card" id="quando-comprar"><div class="card-head"><h2>Quando comprar a passagem para {esc(nome)}</h2><span class="small">Tarifa média pelo mês da compra</span></div>'
+                       f'<p>Nos últimos 12 meses, quem comprou passagem para {esc(nome)} em <b>{MESES[q["barato"]]}</b> pagou em média <b>{rs(preco[q["barato"]])}</b>; '
+                       f'em {MESES[q["caro"]]}, <b>{rs(preco[q["caro"]])}</b>.</p><div class="qbs">{barras}</div>'
+                       f'<p class="nota">A ANAC informa o mês em que a passagem foi vendida, não o da viagem. Bilhetes vendidos para {esc(nome)} entre '
+                       f'{mes_curto(rot["preco"][0])} e {mes_curto(rot["preco"][1])}, corrigidos pela inflação.</p></section>')
+    orig = quando_origens(B, aeros, rota_pag)
+    orig_html = (f'<section class="card"><div class="card-head"><h2>Passagem para {esc(nome)} saindo de cada cidade</h2><span class="small">Média de 12 meses</span></div>'
+                 f'<div class="tw"><table class="qo"><thead><tr><th scope="col">Saindo de</th><th scope="col" class="r">Passagem média</th><th scope="col" class="r">Compra mais barata em</th></tr></thead>'
+                 f'<tbody>{orig}</tbody></table></div><p class="nota">Rotas diretas com mais bilhetes vendidos. Preço médio corrigido pela inflação; o mês indicado é o da compra com menor tarifa média nos últimos 12 meses.</p></section>') if orig else ""
+    pares = [(f"Qual a melhor época para ir a {nome}?",
+              re.sub(r"<[^>]+>", "", frases[0]) + f" O mês mais seco é {MESES[q['seco']]}, com {nf(chuva[q['seco']])} mm de chuva em média."),
+             (f"Qual o mês que mais chove em {nome}?",
+              f"{cap(MESES[q['chuvoso']])}, com {nf(chuva[q['chuvoso']])} mm de chuva em média. O mais seco é {MESES[q['seco']]} ({nf(chuva[q['seco']])} mm)."),
+             (f"Qual o mês mais frio em {nome}?",
+              f"{cap(MESES[q['frio']])}, com mínima média de {nf(tmin[q['frio']])}°C. O mais quente é {MESES[q['quente']]}, com máxima média de {nf(tmax[q['quente']])}°C.")]
+    if q["barato"] is not None:
+        pares.insert(1, (f"Quando comprar passagem para {nome} sai mais barato?",
+                         f"Nos últimos 12 meses, quem comprou em {MESES[q['barato']]} pagou em média {rs(preco[q['barato']])} e quem comprou em "
+                         f"{MESES[q['caro']]}, {rs(preco[q['caro']])}, já corrigido pela inflação. A ANAC informa o mês da compra, não o da viagem."))
+    if q["cheio"] is not None:
+        pares.append((f"Qual o mês com mais turistas em {nome}?",
+                      f"Pelo movimento nos aeroportos, {MESES[q['cheio']]} é o mês com mais passageiros chegando a {nome} "
+                      f"({abrevia(pax[q['cheio']])}) e {MESES[q['vazio']]} o mais tranquilo ({abrevia(pax[q['vazio']])})."))
+    faq, ld = faq_html(pares)
+    corpo = f"""<section class="hero"><span class="kicker">Quando ir · {esc(UF_NOME.get(uf, uf))}</span><h1>Melhor época para ir a {esc(nome)} ({esc(uf)})</h1>
+<p class="lead">{" ".join(frases)}</p>
+<div class="btns"><a class="btn sec" href="/cidades/{s}/">Voos em {esc(nome)}: atrasos e cancelamentos</a><a class="btn sec" href="/quando-ir/">Outros destinos</a></div></section>
+<div class="tiles">{tiles}</div>
+{linha_destino(B, aeros[0], quando=False)}
+<section class="card" id="mes-a-mes"><div class="card-head"><h2>{esc(nome)} mês a mês</h2><span class="small">Clima e movimento</span></div>
+<div class="tw"><table class="qi"><thead><tr><th scope="col">Mês</th><th scope="col">Máx / mín</th><th scope="col">Chuva</th><th scope="col">Chegadas</th><th scope="col">No horário</th></tr></thead><tbody>{"".join(lin)}</tbody></table></div>
+<p class="nota">{" ".join(notas)}</p></section>
+{compra_html}
+{orig_html}
+{faq}"""
+    desc = (f"{cap(MESES[q['seco']])} é o mês mais seco em {nome} ({nf(chuva[q['seco']])} mm) e {MESES[q['chuvoso']]} o mais chuvoso."
+            + (f" Alta temporada em {MESES[q['cheio']]}." if q["cheio"] is not None else "")
+            + " Veja temperatura, chuva, movimento mês a mês e quando a passagem sai mais barata.")
+    return pagina(B, f"/quando-ir/{s}/", f"Melhor época para ir a {nome}: clima, chuva e preço da passagem mês a mês",
+                  desc, corpo, "/quando-ir/", migalhas=[("/quando-ir/", "Quando ir"), ("", nome)], jsonld=[ld],
+                  continuar=itens_cidade(B, aeros[0]))
+
+
+def pg_quando_idx(B: Base) -> str:
+    itens = sorted(B.quando, key=lambda s: -(B.cid[s]["chg"].prev))
+    lin = []
+    for s in itens:
+        q = B.quando_dados[s]
+        c = q["c"]
+        lin.append(f'<tr><td class="wrap"><a href="/quando-ir/{s}/">{esc(c["nome"])}</a> <span class="small">{esc(c["uf"])}</span></td>'
+                   f'<td>{MES_ABR[q["seco"]]}</td><td>{MES_ABR[q["vazio"]] if q["vazio"] is not None else "–"}</td>'
+                   f'<td class="wrap small">{", ".join(MES_ABR[i] for i in q["bons"])}</td></tr>')
+    corpo = f"""<section class="hero"><span class="kicker">Quando ir</span><h1>Melhor época para viajar: clima e preço da passagem por destino</h1>
+<p class="lead">Para cada cidade com aeroporto: chuva e temperatura de cada mês, o movimento de passageiros e quando a passagem sai mais barata, com dados do Inmet e da ANAC. Escolha o destino para ver mês a mês.</p></section>
+<section class="card"><div class="card-head"><h2>{nf(len(itens))} destinos</h2><span class="small">Do mais ao menos movimentado</span></div>
+<div class="tw"><table class="qo"><thead><tr><th scope="col">Destino</th><th scope="col">Menos chuva</th><th scope="col">Menos movimento</th><th scope="col">Melhores meses</th></tr></thead><tbody>{"".join(lin)}</tbody></table></div>
+<p class="nota">Melhores meses = chuva e movimento de passageiros abaixo da metade do ano da própria cidade. Clima: Inmet (normais 1991–2020) ou NASA POWER onde não há estação; movimento: passageiros que chegaram em voos domésticos nos últimos 12 meses (ANAC).</p></section>"""
+    return pagina(B, "/quando-ir/", "Melhor época para viajar: clima, chuva e preço da passagem por destino no Brasil",
+                  f"Quando ir a {nf(len(itens))} destinos do Brasil: mês mais seco, passagem mais barata e movimento de passageiros mês a mês, com dados do Inmet e da ANAC.",
+                  corpo, "/quando-ir/", migalhas=[("", "Quando ir")])
 
 
 def pg_cidades(B: Base) -> str:
@@ -3584,7 +3834,7 @@ def escreve(caminho: str, conteudo: str):
     p.write_text(conteudo, encoding="utf-8")
 
 
-LLMS_TXT = '# Voo em Números\n\n> Pontualidade, atrasos e cancelamentos dos voos domésticos regulares no Brasil, por companhia aérea, aeroporto, rota e número de voo, com base nos dados públicos da ANAC.\n\nConsidera atrasado o voo que chega mais de 30 minutos depois do horário previsto, o mesmo corte da ANAC. Cada página mostra percentual no horário, cancelamentos, atraso médio e ranking. Os números descrevem o passado e não garantem o desempenho de um voo específico.\n\n## Principais páginas\n- [Resumo do mês](__BASE__/resumo/): panorama dos voos domésticos\n- [Companhias aéreas](__BASE__/companhias/): pontualidade e cancelamentos por empresa\n- [Aeroportos](__BASE__/aeroportos/): atrasos e cancelamentos por aeroporto\n- [Cidades e estados](__BASE__/cidades/): voos que saem e chegam em cada cidade, com destinos e companhias\n- [Rankings](__BASE__/rankings/): aeroportos, rotas e voos que mais atrasam, cancelam e cumprem o horário\n- [Rotas](__BASE__/rotas/): desempenho de cada ligação entre aeroportos\n- [Preços](__BASE__/precos/): tarifa média das passagens, evolução em 13 meses, curva de preços e rotas mais caras e mais baratas (tarifas da ANAC)\n- [Demanda](__BASE__/demanda/): passageiros, assentos e ocupação\n- [Mapa](__BASE__/mapa/): visão geográfica da malha\n- [Fim de ano](__BASE__/fim-de-ano/): o que esperar dos voos nas festas\n- [Direitos do passageiro](__BASE__/direitos/): o que fazer em caso de atraso ou cancelamento\n- [Como funciona](__BASE__/sobre/): fonte, método e limitações\n\n## Fonte e atualização\n- Voos: base Voo Regular Ativo (VRA), da ANAC, atualizada todo mês.\n- Passageiros e ocupação: base Dados Estatísticos do Transporte Aéreo, da ANAC, com cerca de dois meses de atraso.\n- Entram voos domésticos regulares de passageiros. Ficam de fora internacionais, só de carga e táxi aéreo.\n- A base não informa o motivo do atraso nem se o cancelamento foi avisado com antecedência.\n\n## Como citar\n- Cite o nome do portal e o link da página usada. Os dados são públicos e os links levam à fonte oficial.\n- Cada página mostra o período dos dados. Informe o período ao usar um número.\n- O portal é independente e não tem ligação com governo, empresas ou instituições financeiras.\n\n## Família em Números\nPortais independentes de dados públicos do Brasil: Óleo em Números (https://oleoemnumeros.com.br), Comex em Números (https://comexemnumeros.com.br), Voo em Números (https://vooemnumeros.com.br) e Economia em Números (https://economiaemnumeros.com.br).\n\n## Contato\n- Erros, sugestões e pedidos de dados: __BASE__/contato/\n'
+LLMS_TXT = '# Voo em Números\n\n> Pontualidade, atrasos e cancelamentos dos voos domésticos regulares no Brasil, por companhia aérea, aeroporto, rota e número de voo, com base nos dados públicos da ANAC.\n\nConsidera atrasado o voo que chega mais de 30 minutos depois do horário previsto, o mesmo corte da ANAC. Cada página mostra percentual no horário, cancelamentos, atraso médio e ranking. Os números descrevem o passado e não garantem o desempenho de um voo específico.\n\n## Principais páginas\n- [Resumo do mês](__BASE__/resumo/): panorama dos voos domésticos\n- [Companhias aéreas](__BASE__/companhias/): pontualidade e cancelamentos por empresa\n- [Aeroportos](__BASE__/aeroportos/): atrasos e cancelamentos por aeroporto\n- [Cidades e estados](__BASE__/cidades/): voos que saem e chegam em cada cidade, com destinos e companhias\n- [Rankings](__BASE__/rankings/): aeroportos, rotas e voos que mais atrasam, cancelam e cumprem o horário\n- [Rotas](__BASE__/rotas/): desempenho de cada ligação entre aeroportos\n- [Preços](__BASE__/precos/): tarifa média das passagens, evolução em 13 meses, curva de preços e rotas mais caras e mais baratas (tarifas da ANAC)\n- [Demanda](__BASE__/demanda/): passageiros, assentos e ocupação\n- [Quando ir](__BASE__/quando-ir/): melhor época para cada destino, com clima (Inmet), preço da passagem e movimento mês a mês\n- [Mapa](__BASE__/mapa/): visão geográfica da malha\n- [Fim de ano](__BASE__/fim-de-ano/): o que esperar dos voos nas festas\n- [Direitos do passageiro](__BASE__/direitos/): o que fazer em caso de atraso ou cancelamento\n- [Como funciona](__BASE__/sobre/): fonte, método e limitações\n\n## Fonte e atualização\n- Voos: base Voo Regular Ativo (VRA), da ANAC, atualizada todo mês.\n- Passageiros e ocupação: base Dados Estatísticos do Transporte Aéreo, da ANAC, com cerca de dois meses de atraso.\n- Entram voos domésticos regulares de passageiros. Ficam de fora internacionais, só de carga e táxi aéreo.\n- A base não informa o motivo do atraso nem se o cancelamento foi avisado com antecedência.\n\n## Como citar\n- Cite o nome do portal e o link da página usada. Os dados são públicos e os links levam à fonte oficial.\n- Cada página mostra o período dos dados. Informe o período ao usar um número.\n- O portal é independente e não tem ligação com governo, empresas ou instituições financeiras.\n\n## Família em Números\nPortais independentes de dados públicos do Brasil: Óleo em Números (https://oleoemnumeros.com.br), Comex em Números (https://comexemnumeros.com.br), Voo em Números (https://vooemnumeros.com.br) e Economia em Números (https://economiaemnumeros.com.br).\n\n## Contato\n- Erros, sugestões e pedidos de dados: __BASE__/contato/\n'
 
 
 def main() -> int:
@@ -3597,6 +3847,7 @@ def main() -> int:
         B.tar = None
     B.familia = carrega_familia(rede=os.environ.get("VOO_SEM_REDE") != "1")
     B.diario = carrega_diario()
+    B.clima = carrega_clima()
     if SAIDA.exists():
         shutil.rmtree(SAIDA)
     SAIDA.mkdir(parents=True)
@@ -3630,6 +3881,18 @@ def main() -> int:
     B.pag_ca = {k for k in {k for m in B.u3 for k in B.cia_aero[m]}
                 if k[0] in B.pag_cias and k[1] in aero_pag and B.soma(B.cia_aero, k, B.u3).prev >= MIN_CIA_AERO_3M}
     monta_cidades(B, todos_aero)
+    B.quando_dados = {}
+    for s_q in B.cid:
+        try:
+            dq = quando_dados(B, s_q)
+        except Exception as e:  # um destino com dado estranho não derruba o site
+            print(f"Aviso: quando ir {s_q}: {e}")
+            dq = None
+        if dq:
+            B.quando_dados[s_q] = dq
+    B.quando = set(B.quando_dados)
+    if not B.quando:  # sem clima baixado ainda: o menu não aponta para página que não existe
+        NAV[:] = [x for x in NAV if x[0] != "/quando-ir/"]
     cias_rank = [c for c, x in B.cia[B.ref].items() if x.prev >= MIN_CIA_RANK]
     cias_rank.sort(key=lambda c: -(B.cia[B.ref][c].p_pont or 0))
     cias_pag = cias_pag_pre(B)
@@ -3667,6 +3930,10 @@ def main() -> int:
     pub("/cidades/", pg_cidades(B), "0.8")
     for s_ in sorted(B.cid):
         pub(f"/cidades/{s_}/", pg_cidade(B, s_, aero_pag, rota_pag, voo_pag), "0.7")
+    if B.quando:
+        pub("/quando-ir/", pg_quando_idx(B), "0.8")
+        for s_ in sorted(B.quando):
+            pub(f"/quando-ir/{s_}/", pg_quando(B, s_, rota_pag), "0.7")
     for uf_ in sorted(B.pag_est):
         pub(f"/estados/{uf_slug(uf_)}/", pg_estado(B, uf_, rota_pag), "0.7")
     for so_, sd_ in sorted(B.pag_pares):

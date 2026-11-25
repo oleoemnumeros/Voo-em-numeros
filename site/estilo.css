@@ -282,3 +282,15 @@ details.calc table.vv{font-size:14px}
 .vv-atr{color:var(--warn);font-weight:600}
 .vv-canc{color:var(--bad);font-weight:600}
 #voo-a-voo>p{margin-bottom:10px}
+
+/* quando ir */
+table.qi td,table.qi th{padding:8px 5px}
+table.qi tr.bom td{background:var(--acc-l)}
+table.qi tr.bom td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
+.qbs{display:grid;gap:4px;margin:10px 0}
+.qb{display:grid;grid-template-columns:34px 1fr 78px;align-items:center;gap:8px;font-size:14px}
+.qb i{display:block;height:12px;border-radius:6px;background:#C6D2DC}
+.qb i.ok{background:var(--good)}.qb i.ruim{background:var(--warn)}
+.qb b{text-align:right;font-weight:600}
+table.qo th{white-space:normal}table.qo td,table.qo th{padding:8px 6px}
+table.qo td.wrap{min-width:0}

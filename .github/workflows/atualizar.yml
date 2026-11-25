@@ -47,7 +47,7 @@ jobs:
           python-version: "3.12"
 
       - name: Instalar dependências
-        run: pip install requests==2.32.3 pillow==11.3.0
+        run: pip install requests==2.32.3 pillow==11.3.0 openpyxl==3.1.5
 
       - name: Baixar dados da ANAC
         id: robo
@@ -69,6 +69,14 @@ jobs:
         env:
           FORCAR: ${{ (github.event_name == 'workflow_dispatch' && inputs.forcar) && '1' || '0' }}
         run: python scripts/atualizar_tarifas.py
+
+      - name: Baixar clima das cidades (Inmet e NASA POWER; só quando falta)
+        id: clima
+        continue-on-error: true
+        env:
+          RELAY_URL: ${{ secrets.RELAY_URL }}
+          RELAY_TOKEN: ${{ secrets.RELAY_TOKEN }}
+        run: python scripts/atualizar_clima.py
 
       - name: Gerar site
         if: always()
