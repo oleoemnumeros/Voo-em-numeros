@@ -596,7 +596,7 @@ def pagina(B: Base, caminho: str, titulo: str, descricao: str, corpo: str, ativo
 <footer><div>
 <span><strong>Voo em Números</strong> · versão beta</span>
 <span>Voos domésticos regulares de passageiros. No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Cancelados contam sobre os voos previstos.</span>
-<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/cidades/">Cidades</a> · <a href="/rankings/">Rankings</a> · <a href="/rotas/">Rotas</a> · <a href="/precos/">Preços</a> · <a href="/quando-ir/">Quando ir</a> · <a href="/mapa/">Mapa</a> · <a href="/resumo/">Resumos</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a> · <a href="/contato/">Contato</a> · <a href="/privacidade/">Privacidade</a></span>
+<span><a href="/companhias/">Companhias</a> · <a href="/aeroportos/">Aeroportos</a> · <a href="/cidades/">Cidades</a> · <a href="/rankings/">Rankings</a> · <a href="/rotas/">Rotas</a> · {'<a href="/internacionais/">Internacionais</a> · ' if getattr(B, "inter", None) else ""}<a href="/precos/">Preços</a> · <a href="/quando-ir/">Quando ir</a> · <a href="/mapa/">Mapa</a> · <a href="/resumo/">Resumos</a> · <a href="/demanda/">Passageiros</a> · <a href="/fim-de-ano/">Fim de ano</a> · <a href="/direitos/">Seus direitos</a> · <a href="/sobre/">Como funciona</a> · <a href="/sugestoes/">Sugestões e críticas</a> · <a href="/contato/">Contato</a> · <a href="/privacidade/">Privacidade</a></span>
 </div>{familia_html()}</footer>
 <script src="/assets/app.js?v={v}" defer></script>
 <script src="/assets/familia.js?v={v}" defer></script>
@@ -962,6 +962,7 @@ def pg_aero(B: Base, o: str, rota_pag, voo_pag) -> str:
 <section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria=f"Percentual de partidas de {cod} no horário mês a mês")}</section>
 <section class="card"><div class="card-head"><h2>Por companhia em {mes}</h2></div><div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col">Chegaram no horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Partidas</th></tr></thead><tbody>{lin_c}</tbody></table></div></section>
 <section class="card"><div class="card-head"><h2>Destinos a partir de {esc(cod)}</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Destino</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_d}</tbody></table></div></section>
+{int_card_aero(getattr(B, "inter", None), o)}
 {f'<section class="card"><div class="card-head"><h2>Voos que mais atrasam saindo de {esc(cod)}</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Trecho</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Atraso médio dos atrasados</th></tr></thead><tbody>{lin_v}</tbody></table></div></section>' if lin_v else ""}
 {faq}"""
     return pagina(B, f"/aeroportos/{B.aero_slug(o)}/", f"Aeroporto {B.nome_cod(o)}: atrasos e cancelamentos | Voo em Números",
@@ -995,7 +996,7 @@ def pg_rotas(B: Base, rota_pag) -> str:
                   f'<td class="r num"><b>{pc(x.p_pont)}</b></td><td class="r num">{pc(x.p_canc)}</td><td class="r num">{nf(x.prev)}</td></tr>'
                   for (o, d), x in ((r, B.soma(B.rota, r, B.u3)) for r in rs[:200]))
     corpo = f"""<section class="hero"><h1>Rotas</h1>
-<p class="lead">Escolha a origem e o destino para ver a pontualidade e o preço de qualquer uma das {nf(len(rota_pag))} rotas diretas. Abaixo, as 200 com mais voos nos últimos 3 meses.</p>
+<p class="lead">Escolha a origem e o destino para ver a pontualidade e o preço de qualquer uma das {nf(len(rota_pag))} rotas diretas. Abaixo, as 200 com mais voos nos últimos 3 meses.{' Voos para o exterior: <a href="/internacionais/">voos internacionais</a>.' if getattr(B, "inter", None) else ""}</p>
 {seletor_rota(B, rota_pag)}
 <div class="busca" role="search"><label for="busca" class="sr">Buscar rota</label><input id="busca" type="search" autocomplete="off" placeholder="Ex.: GRU SSA, Recife, Congonhas"><div id="busca-res" aria-live="polite"></div></div></section>
 <section class="card"><div class="tw"><table><thead><tr><th scope="col">Rota</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos (3 meses)</th></tr></thead><tbody>{lin}</tbody></table></div></section>"""
@@ -1569,7 +1570,7 @@ def pg_sobre(B: Base) -> str:
 <p>Os números de passageiros, assentos e ocupação vêm de outra base da ANAC, a <strong>Dados Estatísticos do Transporte Aéreo</strong>, informada pelas empresas aéreas. Entram voos domésticos regulares e passageiros pagos. Ocupação é passageiros-quilômetros pagos divididos por assentos-quilômetros oferecidos. Essa base chega com cerca de dois meses de atraso e é atualizada pelo robô toda semana.</p>
 <h2>O que entra</h2>
 <ul><li>Voos domésticos regulares de passageiros (linha doméstica, código "N" na base da ANAC).</li>
-<li>Ficam de fora voos internacionais, voos só de carga, táxi aéreo e voos sem horário previsto.</li></ul>
+<li>Os voos internacionais regulares (linha "I", entre o Brasil e o exterior) ficam numa seção à parte, <a href="/internacionais/">Voos internacionais</a>.</li><li>Ficam de fora voos só de carga, táxi aéreo e voos sem horário previsto.</li></ul>
 <h2>Como medimos</h2>
 <ul><li><strong>No horário</strong>: voo que chegou ao destino até 30 minutos depois do horário previsto, ou antes. É o mesmo corte que a ANAC usa para classificar atrasos.</li>
 <li><strong>Cancelados</strong>: voos registrados como cancelados, sobre o total de voos previstos.</li>
@@ -3890,7 +3891,390 @@ def escreve(caminho: str, conteudo: str):
     p.write_text(conteudo, encoding="utf-8")
 
 
-LLMS_TXT = '# Voo em Números\n\n> Pontualidade, atrasos e cancelamentos dos voos domésticos regulares no Brasil, por companhia aérea, aeroporto, rota e número de voo, com base nos dados públicos da ANAC.\n\nConsidera atrasado o voo que chega mais de 30 minutos depois do horário previsto, o mesmo corte da ANAC. Cada página mostra percentual no horário, cancelamentos, atraso médio e ranking. Os números descrevem o passado e não garantem o desempenho de um voo específico.\n\n## Principais páginas\n- [Resumo do mês](__BASE__/resumo/): panorama dos voos domésticos\n- [Companhias aéreas](__BASE__/companhias/): pontualidade e cancelamentos por empresa\n- [Aeroportos](__BASE__/aeroportos/): atrasos e cancelamentos por aeroporto\n- [Cidades e estados](__BASE__/cidades/): voos que saem e chegam em cada cidade, com destinos e companhias\n- [Rankings](__BASE__/rankings/): aeroportos, rotas e voos que mais atrasam, cancelam e cumprem o horário\n- [Rotas](__BASE__/rotas/): desempenho de cada ligação entre aeroportos\n- [Preços](__BASE__/precos/): tarifa média das passagens, evolução em 13 meses, curva de preços e rotas mais caras e mais baratas (tarifas da ANAC)\n- [Demanda](__BASE__/demanda/): passageiros, assentos e ocupação\n- [Quando ir](__BASE__/quando-ir/): melhor época para cada destino, com clima (Inmet), preço da passagem e movimento mês a mês\n- [Mapa](__BASE__/mapa/): visão geográfica da malha\n- [Fim de ano](__BASE__/fim-de-ano/): o que esperar dos voos nas festas\n- [Direitos do passageiro](__BASE__/direitos/): o que fazer em caso de atraso ou cancelamento\n- [Como funciona](__BASE__/sobre/): fonte, método e limitações\n\n## Fonte e atualização\n- Voos: base Voo Regular Ativo (VRA), da ANAC, atualizada todo mês.\n- Passageiros e ocupação: base Dados Estatísticos do Transporte Aéreo, da ANAC, com cerca de dois meses de atraso.\n- Entram voos domésticos regulares de passageiros. Ficam de fora internacionais, só de carga e táxi aéreo.\n- A base não informa o motivo do atraso nem se o cancelamento foi avisado com antecedência.\n\n## Como citar\n- Cite o nome do portal e o link da página usada. Os dados são públicos e os links levam à fonte oficial.\n- Cada página mostra o período dos dados. Informe o período ao usar um número.\n- O portal é independente e não tem ligação com governo, empresas ou instituições financeiras.\n\n## Família em Números\nPortais independentes de dados públicos do Brasil: Óleo em Números (https://oleoemnumeros.com.br), Comex em Números (https://comexemnumeros.com.br), Voo em Números (https://vooemnumeros.com.br) e Economia em Números (https://economiaemnumeros.com.br).\n\n## Contato\n- Erros, sugestões e pedidos de dados: __BASE__/contato/\n'
+LLMS_TXT = '# Voo em Números\n\n> Pontualidade, atrasos e cancelamentos dos voos domésticos regulares no Brasil, por companhia aérea, aeroporto, rota e número de voo, com base nos dados públicos da ANAC.\n\nConsidera atrasado o voo que chega mais de 30 minutos depois do horário previsto, o mesmo corte da ANAC. Cada página mostra percentual no horário, cancelamentos, atraso médio e ranking. Os números descrevem o passado e não garantem o desempenho de um voo específico.\n\n## Principais páginas\n- [Resumo do mês](__BASE__/resumo/): panorama dos voos domésticos\n- [Companhias aéreas](__BASE__/companhias/): pontualidade e cancelamentos por empresa\n- [Aeroportos](__BASE__/aeroportos/): atrasos e cancelamentos por aeroporto\n- [Cidades e estados](__BASE__/cidades/): voos que saem e chegam em cada cidade, com destinos e companhias\n- [Rankings](__BASE__/rankings/): aeroportos, rotas e voos que mais atrasam, cancelam e cumprem o horário\n- [Rotas](__BASE__/rotas/): desempenho de cada ligação entre aeroportos\n- [Voos internacionais](__BASE__/internacionais/): pontualidade dos voos entre o Brasil e o exterior, por companhia, rota e número de voo\n- [Preços](__BASE__/precos/): tarifa média das passagens, evolução em 13 meses, curva de preços e rotas mais caras e mais baratas (tarifas da ANAC)\n- [Demanda](__BASE__/demanda/): passageiros, assentos e ocupação\n- [Quando ir](__BASE__/quando-ir/): melhor época para cada destino, com clima (Inmet), preço da passagem e movimento mês a mês\n- [Mapa](__BASE__/mapa/): visão geográfica da malha\n- [Fim de ano](__BASE__/fim-de-ano/): o que esperar dos voos nas festas\n- [Direitos do passageiro](__BASE__/direitos/): o que fazer em caso de atraso ou cancelamento\n- [Como funciona](__BASE__/sobre/): fonte, método e limitações\n\n## Fonte e atualização\n- Voos: base Voo Regular Ativo (VRA), da ANAC, atualizada todo mês.\n- Passageiros e ocupação: base Dados Estatísticos do Transporte Aéreo, da ANAC, com cerca de dois meses de atraso.\n- Entram voos regulares de passageiros: domésticos e, numa seção à parte, internacionais (Brasil ↔ exterior). Ficam de fora voos só de carga e táxi aéreo.\n- A base não informa o motivo do atraso nem se o cancelamento foi avisado com antecedência.\n\n## Como citar\n- Cite o nome do portal e o link da página usada. Os dados são públicos e os links levam à fonte oficial.\n- Cada página mostra o período dos dados. Informe o período ao usar um número.\n- O portal é independente e não tem ligação com governo, empresas ou instituições financeiras.\n\n## Família em Números\nPortais independentes de dados públicos do Brasil: Óleo em Números (https://oleoemnumeros.com.br), Comex em Números (https://comexemnumeros.com.br), Voo em Números (https://vooemnumeros.com.br) e Economia em Números (https://economiaemnumeros.com.br).\n\n## Contato\n- Erros, sugestões e pedidos de dados: __BASE__/contato/\n'
+
+
+# ---------------------------------------------------------------- voos internacionais (linha "I" da VRA)
+INTER_DIR = RAIZ / "data" / "internacional"
+EXT_AERO_ARQ = RAIZ / "data" / "aeroportos_exterior.json"
+EXT_CIA_ARQ = RAIZ / "data" / "cias_exterior.json"
+CIAS_EXT_FIXAS = {"BOV": ("BoA", "OB"), "ITY": ("ITA Airways", "AZ"), "LAN": ("LATAM Chile", "LA"), "LPE": ("LATAM Peru", "LA"),
+                  "ARE": ("LATAM Colombia", "LA"), "DSM": ("LATAM Argentina", "4M"), "LNE": ("LATAM Equador", "XL"),
+                  "JAT": ("JetSMART", "JA"), "JES": ("JetSMART Argentina", "WJ"), "JAP": ("JetSMART Peru", "JZ"), "DWI": ("Arajet", "DM"),
+                  "SKU": ("Sky Airline", "H2"), "ARU": ("Aruba Airlines", "AG"), "MMZ": ("EuroAtlantic", "YU"),
+                  "AMX": ("Aeroméxico", "AM"), "CMP": ("Copa Airlines", "CM"), "AVA": ("Avianca", "AV"), "ARG": ("Aerolíneas Argentinas", "AR"),
+                  "FBZ": ("Flybondi", "FO"), "PUE": ("Plus Ultra", "PU"), "AEA": ("Air Europa", "UX"), "IBE": ("Iberia", "IB"),
+                  "TAP": ("TAP Air Portugal", "TP"), "AFR": ("Air France", "AF"), "KLM": ("KLM", "KL"), "DLH": ("Lufthansa", "LH"),
+                  "SWR": ("Swiss", "LX"), "BAW": ("British Airways", "BA"), "UAE": ("Emirates", "EK"), "QTR": ("Qatar Airways", "QR"),
+                  "THY": ("Turkish Airlines", "TK"), "ETH": ("Ethiopian Airlines", "ET"), "DAL": ("Delta", "DL"), "AAL": ("American Airlines", "AA"),
+                  "UAL": ("United", "UA"), "ACA": ("Air Canada", "AC"), "SAA": ("South African Airways", "SA"), "RAM": ("Royal Air Maroc", "AT"),
+                  "TAA": ("TAAG Angola", "DT"), "DTA": ("TAAG Angola", "DT"), "BWA": ("Caribbean Airlines", "BW"), "PGA": ("Portugália", "NI")}
+NOMES_EXT = {
+    "SAEZ": "Buenos Aires (Ezeiza)", "SABE": "Buenos Aires (Aeroparque)", "SACO": "Córdoba", "SAME": "Mendoza", "SAAR": "Rosário",
+    "SAZS": "Bariloche", "SARI": "Puerto Iguazú", "SAWH": "Ushuaia", "SASA": "Salta", "SCEL": "Santiago", "SPJC": "Lima",
+    "SUMU": "Montevidéu", "SULS": "Punta del Este", "SGAS": "Assunção", "SGES": "Ciudad del Este", "SKBO": "Bogotá",
+    "SKRG": "Medellín", "SKCG": "Cartagena", "SEQM": "Quito", "SEGU": "Guayaquil", "SVMI": "Caracas", "SLVR": "Santa Cruz de la Sierra",
+    "SLLP": "La Paz", "SLCB": "Cochabamba", "SMJP": "Paramaribo", "SOCA": "Caiena", "SYCJ": "Georgetown",
+    "MPTO": "Cidade do Panamá", "MMMX": "Cidade do México", "MMUN": "Cancún", "MDPC": "Punta Cana", "MDSD": "Santo Domingo",
+    "MROC": "San José", "TNCC": "Curaçao", "TNCA": "Aruba", "TJSJ": "San Juan", "MUHA": "Havana",
+    "KJFK": "Nova York (JFK)", "KEWR": "Nova York (Newark)", "KIAD": "Washington", "KDFW": "Dallas", "KMIA": "Miami",
+    "KMCO": "Orlando", "KFLL": "Fort Lauderdale", "KSFO": "São Francisco", "KLAX": "Los Angeles", "KORD": "Chicago",
+    "KATL": "Atlanta", "KIAH": "Houston", "KBOS": "Boston", "KSEA": "Seattle", "KLAS": "Las Vegas", "KPHL": "Filadélfia",
+    "KCLT": "Charlotte", "CYYZ": "Toronto", "CYUL": "Montreal",
+    "LPPT": "Lisboa", "LPPR": "Porto", "LPMA": "Funchal", "LEMD": "Madri", "LEBL": "Barcelona", "LFPG": "Paris (Charles de Gaulle)",
+    "LFPO": "Paris (Orly)", "LIRF": "Roma", "LIMC": "Milão", "LSZH": "Zurique", "EHAM": "Amsterdã", "EBBR": "Bruxelas",
+    "EDDF": "Frankfurt", "EDDM": "Munique", "EDDK": "Colônia", "EGLL": "Londres (Heathrow)", "EGSS": "Londres (Stansted)",
+    "LTFM": "Istambul", "OMDB": "Dubai", "OMAA": "Abu Dhabi", "OTHH": "Doha", "HAAB": "Adis Abeba", "FAOR": "Joanesburgo",
+    "FACT": "Cidade do Cabo", "HECA": "Cairo", "FNLU": "Luanda", "GMMN": "Casablanca", "GVAC": "Ilha do Sal", "GVPR": "Praia",
+    "DNMM": "Lagos", "DAAG": "Argel", "DTTA": "Túnis", "GOBD": "Dacar", "BIKF": "Reykjavík",
+}
+PAISES_CURTOS = {"ESTADOS UNIDOS DA AMÉRICA": "Estados Unidos", "HOLANDA": "Países Baixos"}
+CIAS_FORA_INT = {"KRE", "RZN", "UKL", "CRV"}   # carga ou fretamento que aparece em linha internacional mista
+MIN_INT_ROTA = 24      # voos previstos em 3 meses para a rota internacional ter página (2 por semana)
+MIN_INT_VOO = 12       # voos medidos em 3 meses para o voo internacional ter página
+MIN_INT_RANK_CIA = 200  # voos previstos em 3 meses para a companhia entrar no ranking internacional
+
+
+def soma_acc(itens) -> "Acc":
+    a = Acc()
+    for x in itens:
+        a.soma(x)
+    return a
+
+
+def carrega_int() -> dict:
+    meses = {}
+    if INTER_DIR.exists():
+        for f in sorted(INTER_DIR.glob("*.json")):
+            meses[f.stem] = json.loads(f.read_text(encoding="utf-8"))
+    return meses
+
+
+class BaseInt(Base):
+    """Mesmos agregados dos domésticos, com nomes de aeroportos e companhias do exterior."""
+
+    def __init__(self, meses: dict, dom: "Base"):
+        super().__init__(meses)
+        self.dom = dom
+        self.ext_aero = json.loads(EXT_AERO_ARQ.read_text(encoding="utf-8")) if EXT_AERO_ARQ.exists() else {}
+        self.ext_cia = json.loads(EXT_CIA_ARQ.read_text(encoding="utf-8")) if EXT_CIA_ARQ.exists() else {}
+
+    def no_brasil(self, icao: str) -> bool:
+        return self.desc_aero.get(icao, "").strip().upper().endswith("BRASIL") or icao in self.iata
+
+    def aero_partes(self, icao: str):
+        if self.no_brasil(icao):
+            return Base.aero_partes(self, icao)
+        p = [x.strip() for x in self.desc_aero.get(icao, icao).split(" - ") if x.strip()]
+        ext = self.ext_aero.get(icao, {})
+        if len(p) >= 3:
+            return " - ".join(p[:-2]), p[-2], p[-1]
+        if len(p) == 2:
+            return p[0], ext.get("cidade") or p[0], p[1]
+        return icao, ext.get("cidade") or icao, ext.get("pais", "")
+
+    def pais(self, icao: str) -> str:
+        if self.no_brasil(icao):
+            return "Brasil"
+        bruto = self.aero_partes(icao)[2].strip().upper()
+        return PAISES_CURTOS.get(bruto) or titulo_pt(bruto) or self.ext_aero.get(icao, {}).get("pais", "")
+
+    def cidade(self, icao: str) -> str:
+        if self.no_brasil(icao):
+            return Base.cidade(self, icao)
+        if icao in NOMES_EXT:
+            return NOMES_EXT[icao].split(" (")[0]
+        bruto = self.aero_partes(icao)[1]
+        bruto = re.sub(r"\(.*?\)", "", bruto).split(",")[0].split("/")[0].strip()
+        return titulo_pt(bruto) if bruto and bruto != icao else (self.ext_aero.get(icao, {}).get("cidade") or icao)
+
+    def aero_nome(self, icao: str) -> str:
+        if self.no_brasil(icao):
+            return self.dom.aero_nome(icao) if hasattr(self.dom, "_nomes_aero") and icao in self.dom._nomes_aero else Base.aero_nome(self, icao)
+        return NOMES_EXT.get(icao) or self.cidade(icao)
+
+    def cod(self, icao: str) -> str:
+        if icao in self.iata:
+            return self.iata[icao]["iata"]
+        return self.ext_aero.get(icao, {}).get("iata", icao)
+
+    def cia_nome(self, c: str) -> str:
+        if c in CIAS:
+            return CIAS[c][0]
+        if c in CIAS_EXT_FIXAS:
+            return CIAS_EXT_FIXAS[c][0]
+        if c in self.ext_cia:
+            return self.ext_cia[c]["nome"]
+        return Base.cia_nome(self, c)
+
+    def pref(self, c: str) -> str:
+        if c in CIAS and CIAS[c][1]:
+            return CIAS[c][1]
+        if c in CIAS_EXT_FIXAS:
+            return CIAS_EXT_FIXAS[c][1]
+        return self.ext_cia.get(c, {}).get("iata") or c
+
+    def cod_voo(self, c: str, num: str) -> str:
+        return f"{self.pref(c)} {num}"
+
+    def voo_slug(self, c: str, num: str) -> str:
+        return f"{self.pref(c).lower()}-{num}"
+
+    def nome_lugar(self, icao: str) -> str:
+        """"Lisboa (LIS)" no exterior; no Brasil, o nome usado no resto do site."""
+        if self.no_brasil(icao):
+            return self.dom.nome_cod(icao) if hasattr(self.dom, "_nomes_aero") else f"{self.cidade(icao)} ({self.cod(icao)})"
+        return f"{self.aero_nome(icao)} ({self.cod(icao)})"
+
+    def link_aero_br(self, icao: str) -> str:
+        n = esc(self.nome_lugar(icao))
+        return f'<a href="/aeroportos/{self.dom.aero_slug(icao)}/">{n}</a>' if self.no_brasil(icao) and icao in self.dom.pag_aero else n
+
+    def link_rota_int(self, o: str, d: str, texto: str) -> str:
+        return f'<a href="/internacionais/rotas/{self.rota_slug(o, d)}/">{texto}</a>' if (o, d) in self.pag_rotas else texto
+
+    def link_voo_int(self, k) -> str:
+        t = esc(self.cod_voo(*k))
+        return f'<a href="/internacionais/voos/{self.voo_slug(*k)}/">{t}</a>' if k in self.pag_voos else t
+
+
+def int_aviso_direitos() -> str:
+    return ('<section class="card"><h2>Seu voo internacional atrasou ou foi cancelado?</h2>'
+            '<p>Em voos que partem do Brasil, a companhia, brasileira ou estrangeira, deve dar a mesma assistência das regras da ANAC: '
+            'informação, alimentação a partir de 2 horas de espera e, a partir de 4 horas, hospedagem se for preciso passar a noite, além da escolha entre '
+            'outro voo e o reembolso. Em voos que partem da União Europeia vale também a regra europeia, que pode prever indenização em dinheiro.</p>'
+            '<div class="btns"><a class="btn sec" href="/direitos/">Guia dos seus direitos</a></div></section>')
+
+
+def int_lin_rota(BI: "BaseInt", o, d, x, extra="") -> str:
+    return (f'<tr><td class="wrap">{BI.link_rota_int(o, d, esc(BI.cod(o)) + " → " + esc(BI.cod(d)))} '
+            f'<span class="small">{esc(BI.aero_nome(o))} → {esc(BI.aero_nome(d))}</span></td>'
+            f'<td class="r num"><b>{pc(x.p_pont)}</b></td><td class="r num">{pc(x.p_canc)}</td><td class="r num">{nf(x.prev)}</td>{extra}</tr>')
+
+
+def pg_internacionais(BI: "BaseInt") -> str:
+    u3 = BI.u3
+    a = BI.soma_tot(u3)
+    am, am0 = BI.tot[BI.ref], BI.tot.get(BI.ant)
+    mes = mes_nome(BI.ref)
+    rot, val, pers = serie_13(BI, BI.tot, None)
+    # companhias
+    cias = [(c, BI.soma(BI.cia, c, u3)) for c in {c for m in u3 for c in BI.cia[m]}]
+    cias = [t for t in cias if t[1].prev >= MIN_INT_RANK_CIA and t[1].med]
+    cias.sort(key=lambda t: -(t[1].p_pont or 0))
+    lin_c = "".join(f'<tr><td>{i}º</td><td>{esc(BI.cia_nome(c))}</td><td style="min-width:150px">{meter(x.p_pont)}</td>'
+                    f'<td class="r num">{pc(x.p_canc)}</td><td class="r num">{nf(x.prev)}</td></tr>' for i, (c, x) in enumerate(cias, 1))
+    rotas = sorted(BI.pag_rotas, key=lambda r: -BI.soma(BI.rota, r, u3).prev)
+    lin_r = "".join(int_lin_rota(BI, o, d, BI.soma(BI.rota, (o, d), u3)) for o, d in rotas[:20])
+    lin_r2 = "".join(int_lin_rota(BI, o, d, BI.soma(BI.rota, (o, d), u3)) for o, d in rotas[20:])
+    # países
+    por_pais = defaultdict(Acc)
+    for (o, d) in {r for m in u3 for r in BI.rota[m]}:
+        ext = d if BI.no_brasil(o) else o
+        por_pais[BI.pais(ext)].soma(BI.soma(BI.rota, (o, d), u3))
+    paises = sorted(por_pais.items(), key=lambda t: -t[1].prev)[:20]
+    lin_p = "".join(f'<tr><td>{esc(p)}</td><td class="r num"><b>{pc(x.p_pont)}</b></td><td class="r num">{pc(x.p_canc)}</td><td class="r num">{nf(x.prev)}</td></tr>'
+                    for p, x in paises)
+    # voos que mais atrasam
+    vs = [(k, soma_acc(BI.voo_legs[k].values())) for k in BI.pag_voos]
+    vs = [t for t in vs if t[1].med >= 20]
+    piores = sorted(vs, key=lambda t: (t[1].p_pont or 0))[:15]
+    lin_v = "".join(f'<tr><td>{BI.link_voo_int(k)}</td><td class="wrap small">{esc(BI.pag_voos[k])}</td><td class="r num"><b>{pc(x.p_pont)}</b></td>'
+                    f'<td class="r num">{min_txt(x.media_atr)}</td></tr>' for k, x in piores)
+    rotas_idx = {}
+    for o, d in BI.pag_rotas:
+        br = o if BI.no_brasil(o) else d
+        rotas_idx.setdefault(br, 0)
+        rotas_idx[br] += 1
+    melhor_c = cias[0] if cias else None
+    pares = [("Qual a pontualidade dos voos internacionais no Brasil?",
+              f"Em {mes}, {pc(am.p_pont)} dos voos internacionais regulares que saem ou chegam ao Brasil chegaram com até 30 minutos de atraso, "
+              f"e {pc(am.p_canc)} foram cancelados (dados da ANAC)."),
+             ("Os voos internacionais atrasam mais que os domésticos?",
+              f"Nos últimos 3 meses, {pc(a.p_pont)} dos voos internacionais chegaram no horário, contra {pc(BI.dom.soma_tot(BI.dom.u3).p_pont)} dos domésticos.")]
+    if melhor_c:
+        pares.append(("Qual companhia aérea internacional é mais pontual no Brasil?",
+                      f"Nos últimos 3 meses, entre as companhias com pelo menos {nf(MIN_INT_RANK_CIA)} voos, a mais pontual foi a {BI.cia_nome(melhor_c[0])}, "
+                      f"com {pc(melhor_c[1].p_pont)} dos voos no horário."))
+    faq, ld = faq_html(pares)
+    corpo = f"""<section class="hero"><span class="kicker">Voos internacionais · {mes}</span><h1>Voos internacionais: atrasos e cancelamentos</h1>
+<p class="lead">Em {mes}, <strong>{pc(am.p_pont)}</strong> dos voos internacionais regulares entre o Brasil e o exterior chegaram no horário e
+<strong>{pc(am.p_canc)}</strong> foram cancelados. Veja cada companhia, rota e número de voo, com dados oficiais da ANAC.</p></section>
+{tiles_acc(am, am0)}
+<section class="card"><h2>Pontualidade mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria="Percentual de voos internacionais no horário mês a mês")}</section>
+<section class="card"><div class="card-head"><h2>Companhias</h2><span class="small">Do mais ao menos pontual, últimos 3 meses</span></div>
+<div class="tw"><table><thead><tr><th scope="col">#</th><th scope="col">Companhia</th><th scope="col">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_c}</tbody></table></div>
+<p class="nota">Só companhias com pelo menos {nf(MIN_INT_RANK_CIA)} voos previstos em 3 meses.</p></section>
+<section class="card"><div class="card-head"><h2>Rotas internacionais</h2><span class="small">As 20 com mais voos, últimos 3 meses</span></div>
+<div class="tw"><table><thead><tr><th scope="col">Rota</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_r}</tbody></table></div>
+{f'<details class="calc"><summary>Ver as outras {len(rotas) - 20} rotas</summary><div class="tw"><table><tbody>{lin_r2}</tbody></table></div></details>' if lin_r2 else ""}</section>
+<div class="grid2">
+<section class="card"><div class="card-head"><h2>Por país</h2><span class="small">Últimos 3 meses</span></div>
+<div class="tw"><table><thead><tr><th scope="col">País</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_p}</tbody></table></div></section>
+<section class="card"><div class="card-head"><h2>Voos que mais atrasam</h2><span class="small">Últimos 3 meses</span></div>
+<div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Trecho</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Atraso médio dos atrasados</th></tr></thead><tbody>{lin_v}</tbody></table></div></section>
+</div>
+<p class="nota">No horário = chegada até 30 minutos depois do previsto, mesmo critério da ANAC. Fonte: ANAC, base Voo Regular Ativo (VRA), linhas internacionais regulares; ficam de fora voos só de carga. Horários na base da ANAC.</p>
+{int_aviso_direitos()}
+{faq}"""
+    return pagina(BI.dom, "/internacionais/", f"Voos internacionais no Brasil: atrasos e cancelamentos em {mes_curto(BI.ref)} | Voo em Números",
+                  f"Pontualidade dos voos internacionais entre o Brasil e o exterior em {mes}: {pc(am.p_pont)} no horário. Ranking de companhias, rotas e voos, com dados da ANAC.",
+                  corpo, "/internacionais/", migalhas=[("", "Internacionais")], jsonld=[ld])
+
+
+def pg_int_rota(BI: "BaseInt", o: str, d: str) -> str:
+    u3 = BI.u3
+    a3 = BI.soma(BI.rota, (o, d), u3)
+    am = BI.rota[BI.ref].get((o, d))
+    usa_mes = am is not None and am.prev >= 20
+    a, a0, base_txt = (am, BI.rota.get(BI.ant, {}).get((o, d)), mes_nome(BI.ref)) if usa_mes else (a3, None, "últimos 3 meses")
+    em = f"Em {base_txt}" if usa_mes else "Nos últimos 3 meses"
+    no, nd = BI.nome_lugar(o), BI.nome_lugar(d)
+    co, cd = BI.cod(o), BI.cod(d)
+    rot, val, pers = serie_13(BI, BI.rota, (o, d))
+    cs = [(c, BI.soma(BI.cia_rota, (c, o, d), u3)) for c in {k[0] for m in u3 for k in BI.cia_rota[m] if k[1] == o and k[2] == d}]
+    cs = [t for t in cs if t[1].prev]
+    cs.sort(key=lambda t: -(t[1].p_pont or 0))
+    lin_c = "".join(f'<tr><td>{esc(BI.cia_nome(c))}</td><td style="min-width:150px">{meter(x.p_pont)}</td><td class="r num">{pc(x.p_canc)}</td>'
+                    f'<td class="r num">{min_txt(x.media_atr)}</td><td class="r num">{nf(x.prev)}</td></tr>' for c, x in cs)
+    vs = []
+    for k, legs in BI.voo_legs.items():
+        x = legs.get((o, d))
+        if x and x.prev:
+            hora = BI.voo_hora[(k[0], k[1], o, d)].most_common(1)[0][0] if BI.voo_hora[(k[0], k[1], o, d)] else ""
+            vs.append((k, x, hora))
+    vs.sort(key=lambda t: -(t[1].p_pont or 0))
+    lin_v = "".join(f'<tr><td>{BI.link_voo_int(k)} <span class="small">{esc(BI.cia_nome(k[0]))}</span></td><td class="r num">{esc(h)}</td>'
+                    f'<td style="min-width:140px">{meter(x.p_pont)}</td><td class="r num">{min_txt(x.media_atr)}</td><td class="r num">{nf(x.prev)}</td></tr>'
+                    for k, x, h in vs)
+    volta = (d, o) in BI.pag_rotas
+    btns = []
+    if volta:
+        btns.append(f'<a class="btn sec" href="/internacionais/rotas/{BI.rota_slug(d, o)}/">Ver a volta: {esc(cd)} → {esc(co)}</a>')
+    for x in (o, d):
+        if BI.no_brasil(x) and x in BI.dom.pag_aero:
+            btns.append(f'<a class="btn sec" href="/aeroportos/{BI.dom.aero_slug(x)}/">Aeroporto {esc(BI.cod(x))}</a>')
+    melhor = cs[0] if len(cs) > 1 else None
+    pares = [(f"O voo de {BI.aero_nome(o)} para {BI.aero_nome(d)} costuma atrasar?",
+              f"{em}, {pc(a.p_pont)} dos voos {co}–{cd} chegaram com até 30 minutos de atraso e {pc(a.p_canc)} foram cancelados."
+              + (f" Entre os que atrasaram, o atraso médio foi de {min_txt(a.media_atr)}." if a.atr else ""))]
+    if vs:
+        pares.append((f"Quais companhias voam de {BI.aero_nome(o)} para {BI.aero_nome(d)}?",
+                      "Nos últimos 3 meses: " + ", ".join(sorted({BI.cia_nome(k[0]) for k, _, _ in vs})) + f", em {len(vs)} voo{'s' if len(vs) > 1 else ''} direto{'s' if len(vs) > 1 else ''}."))
+    if melhor:
+        pares.append((f"Qual companhia é mais pontual entre {co} e {cd}?",
+                      f"Nos últimos 3 meses, a {BI.cia_nome(melhor[0])}, com {pc(melhor[1].p_pont)} dos voos no horário."))
+    faq, ld = faq_html(pares)
+    corpo = f"""<section class="hero"><span class="kicker">Rota internacional · voos diretos</span><h1>{esc(no)} → {esc(nd)}</h1>
+<p class="lead">{em}, <strong>{pc(a.p_pont)}</strong> dos voos diretos {esc(co)} → {esc(cd)} chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados.</p>
+{f'<div class="btns">{"".join(btns)}</div>' if btns else ""}</section>
+{tiles_acc(a, a0)}
+<section class="card"><div class="card-head"><h2>Companhias nesta rota</h2><span class="small">Últimos 3 meses</span></div>
+<div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Atraso médio dos atrasados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_c}</tbody></table></div></section>
+<section class="card"><div class="card-head"><h2>Os voos desta rota</h2><span class="small">Do mais ao menos pontual, últimos 3 meses</span></div>
+<div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col" class="r">Saída</th><th scope="col">No horário</th><th scope="col" class="r">Atraso médio dos atrasados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_v}</tbody></table></div>
+<p class="nota">Horário de saída mais frequente, como aparece na base da ANAC.</p></section>
+<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=pers, aria=f"Percentual de voos {co}–{cd} no horário mês a mês")}</section>
+{int_aviso_direitos()}
+{faq}"""
+    tit = f"Voos {BI.aero_nome(o)} ({co}) → {BI.aero_nome(d)} ({cd}): atrasos e cancelamentos | Voo em Números"
+    return pagina(BI.dom, f"/internacionais/rotas/{BI.rota_slug(o, d)}/", tit,
+                  f"{em}, {pc(a.p_pont)} dos voos {co}–{cd} chegaram no horário e {pc(a.p_canc)} foram cancelados. Companhias e voos desta rota internacional, com dados da ANAC.",
+                  corpo, "/internacionais/", migalhas=[("/internacionais/", "Internacionais"), ("", f"{co} → {cd}")], jsonld=[ld])
+
+
+def pg_int_voo(BI: "BaseInt", k) -> str:
+    c, n = k
+    legs = BI.voo_legs[k]
+    a = soma_acc(legs.values())
+    principais = sorted(legs.items(), key=lambda t: -t[1].prev)
+    (o, d), _ = principais[0]
+    cod, cia = BI.cod_voo(c, n), BI.cia_nome(c)
+    trecho = BI.pag_voos[k]
+    lin_t = "".join(f'<tr><td class="wrap">{BI.link_rota_int(oo, dd, esc(BI.cod(oo)) + " → " + esc(BI.cod(dd)))} <span class="small">{esc(BI.aero_nome(oo))} → {esc(BI.aero_nome(dd))}</span></td>'
+                    f'<td class="r num">{esc(BI.voo_hora[(c, n, oo, dd)].most_common(1)[0][0] if BI.voo_hora[(c, n, oo, dd)] else "")}</td>'
+                    f'<td class="r num"><b>{pc(x.p_pont)}</b></td><td class="r num">{nf(x.prev)}</td></tr>' for (oo, dd), x in principais)
+    dist = [("No horário (até 30 min)", a.pont), ("De 30 min a 1 hora", a.b[0]), ("De 1 a 2 horas", a.b[1]), ("De 2 a 4 horas", a.b[2]), ("Mais de 4 horas", a.b[3])]
+    dist_html = "".join(f'<div style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;font-size:14px">'
+                        f'<span>{nome}</span><span class="num">{nf(q)} voos</span></div>{meter(q / a.med if a.med else None, ruim=i > 0)}</div>'
+                        for i, (nome, q) in enumerate(dist))
+    serie_v = {m: BI.voo[m].get(k) for m in BI.lista}
+    rot = [mes_curto(m) for m in BI.lista]
+    val = [x.p_pont if x and x.med >= 4 else None for x in serie_v.values()]
+    outros = []
+    for kk, ll in BI.voo_legs.items():
+        x = ll.get((o, d))
+        if x and x.med >= 4:
+            outros.append((kk, x))
+    outros.sort(key=lambda t: -(t[1].p_pont or 0))
+    lin_o = "".join(f'<tr><td>{BI.link_voo_int(kk)} <span class="small">{esc(BI.cia_nome(kk[0]))}</span></td><td class="r num"><b>{pc(x.p_pont)}</b></td></tr>'
+                    for kk, x in outros if kk != k)
+    hora0 = BI.voo_hora[(c, n, o, d)].most_common(1)[0][0] if BI.voo_hora[(c, n, o, d)] else ""
+    pares = [(f"O voo {cod} costuma atrasar?",
+              f"Nos últimos 3 meses, o {cod} da {cia} chegou com até 30 minutos de atraso em {pc(a.p_pont)} das viagens e foi cancelado em {pc(a.p_canc)} das previstas."
+              + (f" Quando atrasou mais de 30 minutos, o atraso médio foi de {min_txt(a.media_atr)}." if a.atr else "")),
+             (f"Qual o trecho do voo {cod}?", f"O {cod} liga {trecho}" + (f", com saída mais frequente às {hora0} (horário da base da ANAC)." if hora0 else "."))]
+    faq, ld = faq_html(pares)
+    corpo = f"""<section class="hero"><span class="kicker">Voo internacional · {esc(cia)}</span><h1>Voo {esc(cod)}: {esc(trecho)}</h1>
+<p class="lead">Nos últimos 3 meses, o {esc(cod)} chegou no horário em <strong>{pc(a.p_pont)}</strong> das viagens e foi cancelado em <strong>{pc(a.p_canc)}</strong> das previstas.</p>
+<div class="btns">{BI.link_rota_int(o, d, "Ver a rota " + esc(BI.cod(o)) + " → " + esc(BI.cod(d))).replace("<a ", '<a class="btn sec" ', 1) if (o, d) in BI.pag_rotas else ""}<a class="btn sec" href="/internacionais/">Todos os voos internacionais</a></div></section>
+<div class="tiles">{tile("Chegou no horário", pc(a.p_pont), "até 30 min de atraso")}{tile("Cancelado", pc(a.p_canc), f"{nf(a.canc)} de {nf(a.prev)} previstos")}{tile("Atraso médio quando atrasa", min_txt(a.media_atr), "atrasos acima de 30 min")}{tile("Atrasos acima de 1 hora", pc(a.p_a60), f"{nf(a.b[1] + a.b[2] + a.b[3])} viage{'m' if a.b[1] + a.b[2] + a.b[3] == 1 else 'ns'}")}</div>
+<section class="card"><div class="card-head"><h2>Trechos deste voo</h2><span class="small">Últimos 3 meses</span></div>
+<div class="tw"><table><thead><tr><th scope="col">Trecho</th><th scope="col" class="r">Saída</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_t}</tbody></table></div></section>
+<div class="grid2">
+<section class="card"><h2>Quanto ele atrasa</h2>{dist_html}<p class="nota">Atraso na chegada das {nf(a.med)} viagens realizadas nos últimos 3 meses.</p></section>
+{f'<section class="card"><div class="card-head"><h2>Outros voos {esc(BI.cod(o))} → {esc(BI.cod(d))}</h2><span class="small">Do mais ao menos pontual</span></div><div class="tw"><table><tbody>{lin_o}</tbody></table></div></section>' if lin_o else ""}
+</div>
+<section class="card"><h2>Mês a mês</h2>{svg_barras(rot, val, periodos=list(BI.lista), aria=f"Percentual de viagens do voo {cod} no horário mês a mês")}</section>
+{int_aviso_direitos()}
+{faq}"""
+    return pagina(BI.dom, f"/internacionais/voos/{BI.voo_slug(c, n)}/", f"Voo {cod} {cia} ({trecho}): atrasos, {pc(a.p_pont)} no horário",
+                  f"O voo {cod} da {cia} ({trecho}) chegou no horário em {pc(a.p_pont)} das viagens nos últimos 3 meses. Atrasos, cancelamentos e mês a mês, com dados da ANAC.",
+                  corpo, "/internacionais/", migalhas=[("/internacionais/", "Internacionais"), ("", f"Voo {cod}")], jsonld=[ld])
+
+
+def int_card_aero(BI, a: str) -> str:
+    """Bloco "Voos internacionais" na página do aeroporto brasileiro."""
+    if not BI:
+        return ""
+    rs = [(o, d) for (o, d) in BI.pag_rotas if a in (o, d)]
+    if not rs:
+        return ""
+    rs.sort(key=lambda r: -BI.soma(BI.rota, r, BI.u3).prev)
+    lin = "".join(int_lin_rota(BI, o, d, BI.soma(BI.rota, (o, d), BI.u3)) for o, d in rs[:12])
+    return (f'<section class="card"><div class="card-head"><h2>Voos internacionais</h2><span class="small">Últimos 3 meses</span></div>'
+            f'<div class="tw"><table><thead><tr><th scope="col">Rota</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead>'
+            f'<tbody>{lin}</tbody></table></div><p class="nota"><a href="/internacionais/">Todos os voos internacionais</a></p></section>')
+
+
+def prepara_int(B: "Base"):
+    """Monta a base internacional e decide quais rotas e voos ganham página. Sem dados, devolve None."""
+    meses = carrega_int()
+    if len(meses) < 3:
+        return None
+    BI = BaseInt(meses, B)
+    u3 = BI.u3
+    rotas = {r for m in u3 for r in BI.rota[m]}
+    BI.preparar_nomes({x for r in rotas for x in r})
+    BI.pag_rotas = {r for r in rotas if BI.soma(BI.rota, r, u3).prev >= MIN_INT_ROTA}
+    BI.pag_aero = set()
+    BI.pag_voos = {}
+    vistos = set()
+    for k, legs in sorted(BI.voo_legs.items(), key=lambda t: -sum(x.prev for x in t[1].values())):
+        if k[0] in CIAS_FORA_INT or sum(x.med for x in legs.values()) < MIN_INT_VOO:
+            continue
+        s = BI.voo_slug(*k)
+        if s in vistos:
+            continue
+        vistos.add(s)
+        principais = sorted(legs.items(), key=lambda t: -t[1].prev)
+        (o, d), _ = principais[0]
+        trecho = f"{BI.aero_nome(o)} → {BI.aero_nome(d)}"
+        if len(principais) > 1:
+            trecho += f" e mais {len(principais) - 1} trecho{'s' if len(principais) > 2 else ''}"
+        BI.pag_voos[k] = trecho
+    return BI
+
 
 
 def main() -> int:
@@ -3937,6 +4321,11 @@ def main() -> int:
     B.pag_ca = {k for k in {k for m in B.u3 for k in B.cia_aero[m]}
                 if k[0] in B.pag_cias and k[1] in aero_pag and B.soma(B.cia_aero, k, B.u3).prev >= MIN_CIA_AERO_3M}
     monta_cidades(B, todos_aero)
+    try:
+        B.inter = prepara_int(B)
+    except Exception as e:  # internacional é um extra: dado estranho não derruba o site
+        print(f"Aviso: voos internacionais ignorados ({e})")
+        B.inter = None
     B.quando_dados = {}
     for s_q in B.cid:
         try:
@@ -3956,6 +4345,8 @@ def main() -> int:
     fim = periodo_fim(B)
     # páginas fixas que existem (o bloco "Continue explorando" só liga a páginas existentes)
     B.fixas = {"/", "/companhias/", "/aeroportos/", "/rotas/", "/direitos/", "/mapa/", "/resumo/", "/cidades/", "/rankings/"}
+    if B.inter:
+        B.fixas.add("/internacionais/")
     if fim:
         B.fixas.add("/fim-de-ano/")
     if B.dem:
@@ -3996,6 +4387,20 @@ def main() -> int:
         pub(f"/trajetos/{so_}-para-{sd_}/", pg_trajeto(B, so_, sd_, rota_pag), "0.6")
     for c_, a_ in sorted(B.pag_ca):
         pub(f"/companhias/{B.cia_slug(c_)}/{B.aero_slug(a_)}/", pg_cia_aero(B, c_, a_, rota_pag, voo_pag), "0.6")
+    if B.inter:
+        BI = B.inter
+        try:  # internacional é um extra: um erro aqui não pode derrubar o resto do site
+            paginas_int = [("/internacionais/", pg_internacionais(BI), "0.9")]
+            paginas_int += [(f"/internacionais/rotas/{BI.rota_slug(o_, d_)}/", pg_int_rota(BI, o_, d_), "0.6") for o_, d_ in sorted(BI.pag_rotas)]
+            paginas_int += [(f"/internacionais/voos/{BI.voo_slug(*k_)}/", pg_int_voo(BI, k_), "0.5") for k_ in sorted(BI.pag_voos)]
+        except Exception as e:  # noqa: BLE001
+            print(f"Aviso: páginas internacionais não geradas ({e})")
+            if os.environ.get("VOO_SEM_REDE") == "1":
+                raise
+            paginas_int = []
+            B.inter = None
+        for c_, h_, p_ in paginas_int:
+            pub(c_, h_, p_)
     pub("/rankings/", pg_rankings(B, aero_pag, rota_pag, voo_pag), "0.9")
     for spec_ in RANKINGS:
         pub(f"/rankings/{spec_[0]}/", pg_ranking(B, spec_, aero_pag, rota_pag, voo_pag), "0.8")
@@ -4039,6 +4444,13 @@ def main() -> int:
         idx.append([f"{B.cod(o)} → {B.cod(d)} {B.aero_nome(o)} → {B.aero_nome(d)}", "rota", f"/rotas/{B.rota_slug(o, d)}/"])
     for k in sorted(voo_pag, key=lambda k: -sum(x.prev for x in B.voo_legs[k].values())):
         idx.append([f"{B.cod_voo(*k)} {voo_pag[k]}", B.cia_nome(k[0]), f"/voos/{B.voo_slug(*k)}/"])
+    if B.inter:
+        BI = B.inter
+        idx.append(["Voos internacionais: atrasos e cancelamentos por companhia, rota e voo", "guia", "/internacionais/"])
+        for o_, d_ in sorted(BI.pag_rotas, key=lambda r: -BI.soma(BI.rota, r, BI.u3).prev):
+            idx.append([f"{BI.cod(o_)} → {BI.cod(d_)} {BI.aero_nome(o_)} → {BI.aero_nome(d_)} internacional", "rota internacional", f"/internacionais/rotas/{BI.rota_slug(o_, d_)}/"])
+        for k_ in sorted(BI.pag_voos, key=lambda k: -sum(x.prev for x in BI.voo_legs[k].values())):
+            idx.append([f"{BI.cod_voo(*k_)} {BI.pag_voos[k_]}", BI.cia_nome(k_[0]), f"/internacionais/voos/{BI.voo_slug(*k_)}/"])
     (SAIDA / "busca.json").write_text(json.dumps(idx, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     # busca do cabeçalho (familia-busca.js): mesmo conteúdo, na ordem [título, endereço, tipo]
     geral = [["Companhias aéreas: pontualidade e cancelamentos", "/companhias/", "página"], ["Aeroportos do Brasil", "/aeroportos/", "página"], ["Rotas mais voadas", "/rotas/", "página"]]
