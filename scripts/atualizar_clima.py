@@ -206,6 +206,10 @@ def main() -> int:
         atual["aeros"] = {a: r for a, r in atual["aeros"].items() if "inmet" in r}
     aeros = aeroportos()
     falta = [a for a in aeros if forcar or a not in atual["aeros"]]
+    # quando a ponte para o gov.br for configurada, tenta o Inmet uma vez para todos que só têm NASA
+    if os.environ.get("RELAY_URL") and not atual.get("inmet_pela_ponte"):
+        falta = sorted(set(falta) | {a for a in aeros if "inmet" not in atual["aeros"].get(a, {})})
+        atual["inmet_pela_ponte"] = dt.date.today().isoformat()
     if not falta:
         log("Clima: nada a baixar")
         return 0
