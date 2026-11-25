@@ -2464,6 +2464,7 @@ def clima_aeros(B: Base, aeros):
                     break
                 out[v] = serie
             else:
+                out["dias_chuva"] = reg.get("dias_chuva") or [None] * 12
                 return out
     return None
 
@@ -2583,8 +2584,10 @@ def pg_quando(B: Base, s: str, rota_pag) -> str:
     for i in range(12):
         ch_cls = "vv-ok" if i in secos else "vv-atr" if i in chuvosos else ""
         t = f'<b>{nf(tmax[i])}°</b> / {nf(tmin[i])}°' if tmax[i] is not None and tmin[i] is not None else "–"
+        dc = f'<span class="small" style="display:block">{nf(cl["dias_chuva"][i])} dias</span>' if cl["dias_chuva"][i] is not None else ""
         lin.append(f'<tr{" class=bom" if i in q["bons"] else ""}><td><b>{MES_ABR[i]}</b></td><td class="num">{t}</td>'
-                   f'<td class="num {ch_cls}">{nf(chuva[i]) + " mm" if chuva[i] is not None else "–"}</td>'
+                   f'<td class="num {ch_cls}">{nf(chuva[i]) + " mm" if chuva[i] is not None else "–"}'
+                   f'{dc}</td>'
                    f'<td class="num{" vv-atr" if i in cheios else ""}">{abrevia(pax[i]) if pax[i] else "–"}</td>'
                    f'<td class="num">{pc(pont[i], 0) if pont[i] is not None else "–"}</td></tr>')
     bons_txt = _lista_meses(q["bons"])
