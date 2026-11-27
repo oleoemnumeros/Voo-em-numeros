@@ -1,0 +1,31 @@
+{
+ "_sobre": "Destinos turísticos sem aeroporto com voos regulares, para as páginas 'Melhor época para ir'. Clima pelas coordenadas do destino (Inmet pelo município, ou NASA POWER); voos e passagens pelos aeroportos de acesso, na ordem de preferência.",
+ "destinos": [
+  {"slug": "gramado-rs", "nome": "Gramado", "municipio": "Gramado", "uf": "RS", "lat": -29.379, "lon": -50.874, "aeros": ["SBCX", "SBPA"]},
+  {"slug": "bento-goncalves-rs", "nome": "Bento Gonçalves", "municipio": "Bento Gonçalves", "uf": "RS", "lat": -29.171, "lon": -51.519, "aeros": ["SBCX", "SBPA"]},
+  {"slug": "porto-de-galinhas-pe", "nome": "Porto de Galinhas", "municipio": "Ipojuca", "uf": "PE", "lat": -8.505, "lon": -35.005, "aeros": ["SBRF"]},
+  {"slug": "maragogi-al", "nome": "Maragogi", "municipio": "Maragogi", "uf": "AL", "lat": -9.012, "lon": -35.222, "aeros": ["SBMO", "SBRF"]},
+  {"slug": "sao-miguel-dos-milagres-al", "nome": "São Miguel dos Milagres", "municipio": "São Miguel dos Milagres", "uf": "AL", "lat": -9.264, "lon": -35.371, "aeros": ["SBMO"]},
+  {"slug": "praia-da-pipa-rn", "nome": "Praia da Pipa", "municipio": "Tibau do Sul", "uf": "RN", "lat": -6.228, "lon": -35.047, "aeros": ["SBSG"]},
+  {"slug": "canoa-quebrada-ce", "nome": "Canoa Quebrada", "municipio": "Aracati", "uf": "CE", "lat": -4.528, "lon": -37.708, "aeros": ["SBFZ", "SBAC"]},
+  {"slug": "praia-do-forte-ba", "nome": "Praia do Forte", "municipio": "Mata de São João", "uf": "BA", "lat": -12.578, "lon": -38.003, "aeros": ["SBSV"]},
+  {"slug": "itacare-ba", "nome": "Itacaré", "municipio": "Itacaré", "uf": "BA", "lat": -14.278, "lon": -38.996, "aeros": ["SBIL", "SBSV"]},
+  {"slug": "trancoso-ba", "nome": "Trancoso", "municipio": "Porto Seguro", "uf": "BA", "lat": -16.591, "lon": -39.093, "aeros": ["SBPS"]},
+  {"slug": "chapada-diamantina-ba", "nome": "Chapada Diamantina (Lençóis)", "municipio": "Lençóis", "uf": "BA", "lat": -12.562, "lon": -41.390, "aeros": ["SBLE", "SBSV"]},
+  {"slug": "lencois-maranhenses-ma", "nome": "Lençóis Maranhenses (Barreirinhas)", "municipio": "Barreirinhas", "uf": "MA", "lat": -2.757, "lon": -42.825, "aeros": ["SBSL"]},
+  {"slug": "alter-do-chao-pa", "nome": "Alter do Chão", "municipio": "Santarém", "uf": "PA", "lat": -2.502, "lon": -54.952, "aeros": ["SBSN"]},
+  {"slug": "chapada-dos-veadeiros-go", "nome": "Chapada dos Veadeiros (Alto Paraíso)", "municipio": "Alto Paraíso de Goiás", "uf": "GO", "lat": -14.133, "lon": -47.510, "aeros": ["SBBR"]},
+  {"slug": "pirenopolis-go", "nome": "Pirenópolis", "municipio": "Pirenópolis", "uf": "GO", "lat": -15.852, "lon": -48.959, "aeros": ["SBBR", "SBGO"]},
+  {"slug": "ouro-preto-mg", "nome": "Ouro Preto", "municipio": "Ouro Preto", "uf": "MG", "lat": -20.386, "lon": -43.503, "aeros": ["SBCF"]},
+  {"slug": "arraial-do-cabo-rj", "nome": "Arraial do Cabo", "municipio": "Arraial do Cabo", "uf": "RJ", "lat": -22.966, "lon": -42.028, "aeros": ["SBCB", "SBRJ", "SBGL"]},
+  {"slug": "buzios-rj", "nome": "Búzios", "municipio": "Armação dos Búzios", "uf": "RJ", "lat": -22.747, "lon": -41.881, "aeros": ["SBCB", "SBRJ", "SBGL"]},
+  {"slug": "paraty-rj", "nome": "Paraty", "municipio": "Paraty", "uf": "RJ", "lat": -23.218, "lon": -44.713, "aeros": ["SBRJ", "SBGL"]},
+  {"slug": "ilhabela-sp", "nome": "Ilhabela", "municipio": "Ilhabela", "uf": "SP", "lat": -23.778, "lon": -45.358, "aeros": ["SBSJ", "SBGR"]},
+  {"slug": "ubatuba-sp", "nome": "Ubatuba", "municipio": "Ubatuba", "uf": "SP", "lat": -23.434, "lon": -45.083, "aeros": ["SBSJ", "SBGR"]},
+  {"slug": "campos-do-jordao-sp", "nome": "Campos do Jordão", "municipio": "Campos do Jordão", "uf": "SP", "lat": -22.739, "lon": -45.591, "aeros": ["SBSJ", "SBGR"]},
+  {"slug": "olimpia-sp", "nome": "Olímpia", "municipio": "Olímpia", "uf": "SP", "lat": -20.737, "lon": -48.915, "aeros": ["SBSR"]},
+  {"slug": "balneario-camboriu-sc", "nome": "Balneário Camboriú", "municipio": "Balneário Camboriú", "uf": "SC", "lat": -26.991, "lon": -48.635, "aeros": ["SBNF", "SBFL"]},
+  {"slug": "bombinhas-sc", "nome": "Bombinhas", "municipio": "Bombinhas", "uf": "SC", "lat": -27.148, "lon": -48.483, "aeros": ["SBNF", "SBFL"]},
+  {"slug": "penha-beto-carrero-sc", "nome": "Penha (Beto Carrero World)", "municipio": "Penha", "uf": "SC", "lat": -26.794, "lon": -48.618, "aeros": ["SBNF"]}
+ ]
+}

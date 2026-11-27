@@ -4,6 +4,8 @@
       Compara o miolo (<main>) de cada página com o manifesto da publicação anterior, que fica no próprio
       site (/indexnow-manifesto-2.json). Grava na pasta o manifesto novo, a lista do que mudou
       (/indexnow-novas.json) e o arquivo da chave (/<chave>.txt), que prova que o site é nosso.
+      Também acerta a data de cada página no sitemap.xml (<lastmod>): ela só muda quando o miolo da página
+      muda. As datas ficam no próprio site (/lastmod.json), de uma publicação para a outra.
   python scripts/indexnow.py enviar <pasta do site ou -> <https://dominio> <chave>
       Depois do deploy: envia a lista. Sem a pasta ("-"), lê a lista já publicada no site.
 
@@ -54,8 +56,34 @@ def preparar(pasta: Path, base: str, chave: str) -> list:
     (pasta / "indexnow-manifesto-2.json").write_text(json.dumps(novo, separators=(",", ":")), "utf-8")
     (pasta / "indexnow-novas.json").write_text(json.dumps(mudou[:LIMITE], separators=(",", ":")), "utf-8")
     (pasta / f"{chave}.txt").write_text(chave, "utf-8")
+    datas_sitemap(pasta, base, novo)
     print(f"IndexNow: {len(mudou)} de {len(novo)} páginas mudaram" + (" (site fechado aos buscadores: nada será enviado)" if fechado else ""))
     return mudou
+
+
+def datas_sitemap(pasta: Path, base: str, novo: dict) -> None:
+    """<lastmod> verdadeiro: a data em que o miolo da página mudou pela última vez, e não a data da publicação.
+    Sem isso, todas as páginas dizem ter mudado hoje, todo dia, e o Google passa a ignorar a data."""
+    sm = pasta / "sitemap.xml"
+    if not sm.exists():
+        return
+    hoje = time.strftime("%Y-%m-%d")
+    try:
+        velhas = json.loads(baixar(f"{base}/lastmod.json?t={int(time.time())}"))
+    except Exception as e:  # primeira vez: todas ficam com a data de hoje
+        print(f"Sitemap: sem datas anteriores ({e}); usando a data de hoje.")
+        velhas = {}
+    datas = {}
+    for c, h in novo.items():
+        v = velhas.get(c)
+        datas[c] = [h, v[1] if v and v[0] == h else hoje]
+    (pasta / "lastmod.json").write_text(json.dumps(datas, separators=(",", ":")), "utf-8")
+    dom = re.escape(base)
+    texto = re.sub(r"<loc>" + dom + r"([^<]*)</loc><lastmod>[^<]*</lastmod>",
+                   lambda m: f"<loc>{base}{m.group(1)}</loc><lastmod>{datas.get(m.group(1), [None, hoje])[1]}</lastmod>",
+                   sm.read_text("utf-8"))
+    sm.write_text(texto, "utf-8")
+    print(f"Sitemap: {sum(1 for d in datas.values() if d[1] == hoje)} de {len(datas)} páginas com data de hoje.")
 
 
 def enviar(pasta, base: str, chave: str) -> int:

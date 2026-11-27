@@ -312,3 +312,10 @@ table.qo td.wrap{min-width:0}
 .atalhos a{flex:0 0 auto;padding:7px 12px;border:1px solid #C6D2DC;border-radius:999px;background:#fff;font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
 h2[id],section[id]{scroll-margin-top:96px}
 .rs .btn{flex:1 1 100%}
+.lista-voos{list-style:none;padding:0;margin:8px 0 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px 16px}
+.lista-voos li{font-size:14px}
+ul.dicas{padding-left:18px;margin:6px 0 0}
+ul.dicas li{margin:0 0 10px;line-height:1.5}
+ul.guias{list-style:none;padding:0;margin:6px 0 0;display:grid;gap:10px}
+ul.guias li a{font-weight:600}
+ul.guias li .small{display:block}

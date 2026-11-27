@@ -30,6 +30,7 @@ SAIDA = RAIZ / "data" / "clima.json"
 DEBUG = RAIZ / "data" / "clima_debug.json"
 MESES = RAIZ / "data" / "meses"
 COORD = RAIZ / "data" / "aeroportos_iata.json"
+DESTINOS = RAIZ / "data" / "destinos.json"   # destinos turísticos sem aeroporto (clima pelas coordenadas do próprio destino)
 UA = {"User-Agent": "Mozilla/5.0 (compatible; VooEmNumeros/1.0; +https://vooemnumeros.com.br)"}
 
 INMET_PAGINA = "https://portal.inmet.gov.br/normais"
@@ -206,11 +207,14 @@ def main() -> int:
         atual["aeros"] = {a: r for a, r in atual["aeros"].items() if "inmet" in r}
     aeros = aeroportos()
     falta = [a for a in aeros if forcar or a not in atual["aeros"]]
+    destinos = json.loads(DESTINOS.read_text(encoding="utf-8"))["destinos"] if DESTINOS.exists() else []
+    atual.setdefault("destinos", {})
+    falta_dest = [d for d in destinos if forcar or d["slug"] not in atual["destinos"]]
     # quando a ponte para o gov.br for configurada, tenta o Inmet uma vez para todos que só têm NASA
     if os.environ.get("RELAY_URL") and not atual.get("inmet_pela_ponte"):
         falta = sorted(set(falta) | {a for a in aeros if "inmet" not in atual["aeros"].get(a, {})})
         atual["inmet_pela_ponte"] = dt.date.today().isoformat()
-    if not falta:
+    if not falta and not falta_dest:
         log("Clima: nada a baixar")
         return 0
     dbg = {"execucao": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "aeroportos": len(aeros), "faltando": len(falta)}
@@ -236,6 +240,23 @@ def main() -> int:
             time.sleep(1)
         if "inmet" in reg or "nasa" in reg:
             atual["aeros"][a] = reg
+    ok_dest = 0
+    for d in falta_dest:  # destinos sem aeroporto: Inmet pelo município do destino, senão NASA pelas coordenadas
+        reg = {"cidade": d["municipio"], "uf": d["uf"]}
+        if len(tabelas) == 3:
+            e = casa_estacao(tabelas, d["municipio"], d["uf"])
+            if e:
+                reg["inmet"] = {"estacao": e[0], "tmax": e[1], "tmin": e[2], "chuva": e[3]}
+        n, st = nasa(d["lat"], d["lon"])
+        if n:
+            reg["nasa"] = n
+        else:
+            dbg.setdefault("nasa_erros", {})[d["slug"]] = st
+        time.sleep(1)
+        if "inmet" in reg or "nasa" in reg:
+            atual["destinos"][d["slug"]] = reg
+            ok_dest += 1
+    dbg["destinos"] = ok_dest
     atual["inmet_periodo"] = "1991-2020"
     atual["nasa_periodo"] = "2001-2020"
     atual["nasa_metodo"] = NASA_METODO
@@ -243,7 +264,7 @@ def main() -> int:
     dbg.update({"com_inmet": ok_inmet, "com_nasa": ok_nasa, "salvos": len(atual["aeros"])})
     SAIDA.write_text(json.dumps(atual, ensure_ascii=False, separators=(",", ":"), sort_keys=True), encoding="utf-8")
     DEBUG.write_text(json.dumps(dbg, ensure_ascii=False, indent=1), encoding="utf-8")
-    log(f"Clima: {ok_inmet} com estação do Inmet, {ok_nasa} com NASA POWER, {len(atual['aeros'])} aeroportos salvos")
+    log(f"Clima: {ok_inmet} com estação do Inmet, {ok_nasa} com NASA POWER, {len(atual['aeros'])} aeroportos salvos, {ok_dest} destinos sem aeroporto")
     return 0
 
 

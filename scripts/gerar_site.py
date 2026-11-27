@@ -812,8 +812,8 @@ def fim_card(B: Base, fim) -> str:
         pior = min(piores)
         resumo = (f' Entre 19/12/{ano} e 04/01/{ano + 1}, <strong>{pc(S[3] / S[2])}</strong> dos voos chegaram no horário e '
                   f'<strong>{pc(S[1] / S[0])}</strong> foram cancelados. O pior dia foi {pior[1].day} de {MESES[pior[1].month - 1]} ({pc(pior[0])} no horário).')
-    return (f'<section class="card dark destaque"><span class="kicker">Em destaque</span><h2>Vai viajar no fim do ano?</h2>'
-            f'<p>Veja como foram os atrasos e cancelamentos no Natal e Ano-Novo de {ano}, dia a dia, por companhia e por aeroporto.{resumo}</p>'
+    return (f'<section class="card dark destaque"><span class="kicker">Em destaque</span><h2>Vai viajar no fim de ano de {ano + 1}?</h2>'
+            f'<p>Veja como foram os atrasos e cancelamentos no último Natal e Ano-Novo, dia a dia, por companhia e por aeroporto, e quais dias evitar.{resumo}</p>'
             f'<div class="btns"><a class="btn" href="/fim-de-ano/" style="background:#F2B33D;color:#14161A">Ver o fim de ano</a></div></section>')
 
 
@@ -947,6 +947,13 @@ def pg_aero(B: Base, o: str, rota_pag, voo_pag) -> str:
     vs.sort(key=lambda t: (t[1].p_pont or 0, -t[1].med))
     lin_v = "".join(f'<tr><td><a href="/voos/{B.voo_slug(*k)}/">{esc(B.cod_voo(*k))}</a></td><td class="wrap">{esc(voo_pag[k])}</td>'
                     f'<td class="r num"><b>{pc(x.p_pont)}</b></td><td class="r num">{min_txt(x.media_atr)}</td></tr>' for k, x in vs[:10])
+    # voos de rotas pequenas (sem página de rota): a página do aeroporto é o único caminho até eles
+    soltos = sorted((k for k in voo_pag if any(o in ld for ld in B.voo_legs[k]) and not any(ld in rota_pag for ld in B.voo_legs[k])),
+                    key=lambda k: B.cod_voo(*k))
+    soltos_html = ("" if not soltos else
+                   f'<section class="card"><h2>Outros voos em {esc(cod)}</h2><p class="small">Voos de rotas com pouco movimento, que não têm página de rota.</p><ul class="lista-voos">' +
+                   "".join(f'<li><a href="/voos/{B.voo_slug(*k)}/">{esc(B.cod_voo(*k))}</a> <span class="small">{esc(voo_pag[k])}</span></li>' for k in soltos) +
+                   "</ul></section>")
     pior_c = min(cs, key=lambda t: t[1].p_pont or 1) if cs else None
     pares = [
         (f"O aeroporto {B.nome_cod(o)} atrasa muito?",
@@ -968,6 +975,7 @@ def pg_aero(B: Base, o: str, rota_pag, voo_pag) -> str:
 <section class="card"><div class="card-head"><h2>Destinos a partir de {esc(cod)}</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Destino</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{lin_d}</tbody></table></div></section>
 {int_card_aero(getattr(B, "inter", None), o)}
 {f'<section class="card"><div class="card-head"><h2>Voos que mais atrasam saindo de {esc(cod)}</h2><span class="small">Últimos 3 meses</span></div><div class="tw"><table><thead><tr><th scope="col">Voo</th><th scope="col">Trecho</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Atraso médio dos atrasados</th></tr></thead><tbody>{lin_v}</tbody></table></div></section>' if lin_v else ""}
+{soltos_html}
 {faq}"""
     return pagina(B, f"/aeroportos/{B.aero_slug(o)}/", f"Aeroporto {B.nome_cod(o)}: atrasos e cancelamentos | Voo em Números",
                   f"{cap(base_txt)}: {pc(a.p_pont)} das partidas de {cod} chegaram no horário e {pc(a.p_canc)} foram canceladas. Companhias, destinos e voos que mais atrasam.",
@@ -1335,37 +1343,35 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 
 def periodo_fim(B: Base):
     """Último fim de ano com dezembro e janeiro completos nos dados."""
-    for m in reversed(B.lista):
+    t = temporadas_fim(B)
+    return t[-1] if t else None
+
+
+def temporadas_fim(B: Base) -> list:
+    """Todas as temporadas de fim de ano (19/12 a 04/01) com dezembro e janeiro nos dados, da mais antiga à mais recente."""
+    out = []
+    for m in B.lista:
         a, mm = m.split("-")
         if mm == "01" and f"{int(a) - 1}-12" in B.meses:
             ano = int(a) - 1
             ini, fim = dt.date(ano, 12, 19), dt.date(ano + 1, 1, 4)
             dias = [ini + dt.timedelta(days=i) for i in range((fim - ini).days + 1)]
-            return {"ano": ano, "dias": dias, "meses": [f"{ano}-12", f"{ano + 1}-01"], "nov": f"{ano}-11"}
-    return None
+            out.append({"ano": ano, "dias": dias, "meses": [f"{ano}-12", f"{ano + 1}-01"], "nov": f"{ano}-11"})
+    return out
 
 
-def pg_fim(B: Base, fim, aero_pag) -> str:
-    ano = fim["ano"]
+def _fim_somas(B: Base, fim) -> dict:
+    """Totais diários do país, por companhia e por aeroporto numa temporada."""
     def junta(dst, src):
         for k, v in src.items():
             dst[k] = [x + y for x, y in zip(dst.get(k, [0, 0, 0, 0]), v)]
-    D = {}
-    DC = defaultdict(dict)
-    DA = defaultdict(dict)
+    D, DC, DA = {}, defaultdict(dict), defaultdict(dict)
     for m in fim["meses"]:
         junta(D, B.meses[m]["dias"])
         for c, dd in B.meses[m]["dias_cia"].items():
             junta(DC[c], dd)
         for a, dd in B.meses[m]["aero_dia"].items():
             junta(DA[a], dd)
-    # piores dias de dezembro inteiro (fora do período das festas)
-    dez = sorted(((k, v[3] / v[2], v[1]) for k, v in D.items() if k.startswith(f"{ano}-12") and v[2] >= 500), key=lambda t: t[1])
-    antes = [t for t in dez[:2] if t[0] < f"{ano}-12-19"]
-    dez_txt = ""
-    if antes:
-        dez_txt = (" Os piores dias de dezembro, porém, vieram antes das festas: " + " e ".join(
-            f"{int(k[8:])}/12 ({pc(p)} no horário, {nf(c)} cancelamentos)" for k, p, c in antes) + ".")
     chaves = [d.isoformat() for d in fim["dias"]]
 
     def tot(dd):
@@ -1376,61 +1382,137 @@ def pg_fim(B: Base, fim, aero_pag) -> str:
                 s = [x + y for x, y in zip(s, v)]
         return s
     S = tot(D)
-    p_pont = S[3] / S[2] if S[2] else None
-    p_canc = S[1] / S[0] if S[0] else None
-    nov = B.tot.get(fim["nov"])
     vals = [(D[k][3] / D[k][2]) if k in D and D[k][2] else None for k in chaves]
+    piores = sorted([(d, v) for d, v in zip(fim["dias"], vals) if v is not None], key=lambda t: t[1])
+    return {"D": D, "DC": DC, "DA": DA, "tot": tot, "S": S, "vals": vals, "piores": piores, "chaves": chaves,
+            "p_pont": S[3] / S[2] if S[2] else None, "p_canc": S[1] / S[0] if S[0] else None}
+
+
+def _dia_txt(d) -> str:
+    return f"{d.day} de {MESES[d.month - 1]}"
+
+
+def _dia_sem(prox: int, m: int, d: int) -> str:
+    """Dia da semana da data dd/mm na temporada que começa em dezembro de `prox`: 'numa quarta-feira', 'num sábado'."""
+    w = dt.date(prox if m == 12 else prox + 1, m, d).weekday()
+    return ("num " if w >= 5 else "numa ") + DIAS_SEMANA[w] + ("-feira" if w < 5 else "")
+
+
+def pg_fim(B: Base, fim, aero_pag) -> str:
+    temps = temporadas_fim(B)
+    ano = fim["ano"]
+    prox = ano + 1
+    X = _fim_somas(B, fim)
+    D, S, vals, piores, chaves = X["D"], X["S"], X["vals"], X["piores"], X["chaves"]
+    p_pont, p_canc = X["p_pont"], X["p_canc"]
+    # piores dias de dezembro inteiro (fora do período das festas)
+    dez = sorted(((k, v[3] / v[2], v[1]) for k, v in D.items() if k.startswith(f"{ano}-12") and v[2] >= 500), key=lambda t: t[1])
+    antes = [t for t in dez[:2] if t[0] < f"{ano}-12-19"]
+    dez_txt = ""
+    if antes:
+        dez_txt = (" Os piores dias de dezembro, porém, vieram antes das festas: " + " e ".join(
+            f"{int(k[8:])}/12 ({pc(p)} no horário, {nf(c)} cancelamentos)" for k, p, c in antes) + ".")
+    nov = B.tot.get(fim["nov"])
     rots = [f"{d.day:02d}/{d.month:02d}" for d in fim["dias"]]
     validos = [v for v in vals if v is not None]
     corte = sorted(validos)[2] if len(validos) > 3 else 0
     cores = ["#C2410C" if v is not None and v <= corte else "#2A9DE0" for v in vals]
     graf = svg_barras(rots, vals, destaque_ultimo=False, altura=210, cores=cores,
                       aria=f"Pontualidade diária dos voos domésticos de 19/12/{ano} a 04/01/{ano + 1}")
-    piores = sorted([(k, v) for k, v in zip(fim["dias"], vals) if v is not None], key=lambda t: t[1])[:3]
-    piores_txt = ", ".join(f"{d.day} de {MESES[d.month - 1]} ({pc(v)})" for d, v in piores)
+    piores_txt = ", ".join(f"{_dia_txt(d)} ({pc(v)})" for d, v in piores[:3])
     # companhias
     lin_c = []
-    for c, dd in DC.items():
-        s = tot(dd)
-        if s[0] >= 500:
-            lin_c.append((c, s))
+    for c, dd in X["DC"].items():
+        sc = X["tot"](dd)
+        if sc[0] >= 500:
+            lin_c.append((c, sc))
     lin_c.sort(key=lambda t: -(t[1][3] / t[1][2] if t[1][2] else 0))
-    tab_c = "".join(f'<tr><td>{B.link_cia(c)}</td><td style="min-width:180px">{meter(s[3] / s[2] if s[2] else None)}</td>'
-                    f'<td class="r num">{pc(s[1] / s[0] if s[0] else None)}</td><td class="r num">{nf(s[0])}</td></tr>' for c, s in lin_c)
+    tab_c = "".join(f'<tr><td>{B.link_cia(c)}</td><td style="min-width:180px">{meter(sc[3] / sc[2] if sc[2] else None)}</td>'
+                    f'<td class="r num">{pc(sc[1] / sc[0] if sc[0] else None)}</td><td class="r num">{nf(sc[0])}</td></tr>' for c, sc in lin_c)
     # aeroportos
     la = []
-    for a, dd in DA.items():
-        s = tot(dd)
-        if s[0] >= 600 and a in aero_pag:
-            la.append((a, s))
+    for a, dd in X["DA"].items():
+        sa = X["tot"](dd)
+        if sa[0] >= 600 and a in aero_pag:
+            la.append((a, sa))
     la.sort(key=lambda t: (t[1][3] / t[1][2] if t[1][2] else 1))
     tab_a = "".join(f'<tr><td><a href="/aeroportos/{B.aero_slug(a)}/">{esc(B.cod(a))}</a> <span class="small">{esc(B.aero_nome(a))}</span></td>'
-                    f'<td class="r num"><b>{pc(s[3] / s[2] if s[2] else None)}</b></td><td class="r num">{pc(s[1] / s[0] if s[0] else None)}</td><td class="r num">{nf(s[0])}</td></tr>'
-                    for a, s in la[:12])
+                    f'<td class="r num"><b>{pc(sa[3] / sa[2] if sa[2] else None)}</b></td><td class="r num">{pc(sa[1] / sa[0] if sa[0] else None)}</td><td class="r num">{nf(sa[0])}</td></tr>'
+                    for a, sa in la[:12])
     comp = ""
     if nov and nov.med and p_pont is not None:
         dif = 100 * (p_pont - nov.p_pont)
         comp = (f" Em novembro de {ano}, um mês comum, eram {pc(nov.p_pont)} no horário: "
                 f"{'uma queda' if dif < 0 else 'uma alta'} de {nf(abs(dif), 1)} pontos percentuais.")
+    # temporadas anteriores, lado a lado, e os dias que aparecem entre os piores em mais de uma
+    hist = []
+    contagem = defaultdict(int)
+    for t in temps:
+        Y = X if t["ano"] == ano else _fim_somas(B, t)
+        if Y["p_pont"] is None:
+            continue
+        pdia = Y["piores"][0] if Y["piores"] else None
+        hist.append((t["ano"], Y, pdia))
+        for d, _ in Y["piores"][:5]:
+            contagem[(d.month, d.day)] += 1
+    repetem = sorted(k for k, n in contagem.items() if n > 1 and len(hist) > 1)
+    tab_h = "".join(f'<tr><td>Natal {a} e Ano-Novo {a + 1}</td><td class="r num"><b>{pc(Y["p_pont"])}</b></td><td class="r num">{pc(Y["p_canc"])}</td>'
+                    f'<td class="r num">{nf(Y["S"][0])}</td><td class="r">{f"{pd[0].day:02d}/{pd[0].month:02d} ({pc(pd[1])})" if pd else "–"}</td></tr>'
+                    for a, Y, pd in hist)
+    hist_card = ""
+    if len(hist) > 1:
+        rep_txt = ""
+        if repetem:
+            rep_txt = ("<p>Dias que ficaram entre os 5 piores em mais de um ano: " + ", ".join(
+                f"<strong>{d:02d}/{m:02d}</strong> (em {prox if m == 12 else prox + 1} cai {_dia_sem(prox, m, d)})"
+                for m, d in repetem) + ".</p>")
+        hist_card = (f'<section class="card"><h2>Ano a ano</h2><div class="tw"><table><thead><tr><th scope="col">Temporada</th><th scope="col" class="r">No horário</th>'
+                     f'<th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th><th scope="col" class="r">Pior dia</th></tr></thead><tbody>{tab_h}</tbody></table></div>{rep_txt}'
+                     '<p class="nota">Sempre de 19 de dezembro a 4 de janeiro, voos domésticos regulares.</p></section>')
+    # dicas a partir dos dados
+    dicas = []
+    if piores:
+        evita = [d for d, _ in piores[:3]]
+        dicas.append("<li><b>Se puder escolher a data, fuja dos dias que mais atrasaram:</b> " + ", ".join(
+            f"{d.day:02d}/{d.month:02d} (em {prox if d.month == 12 else prox + 1} cai {_dia_sem(prox, d.month, d.day)})" for d in evita) +
+            f". Foram os piores no fim de ano de {ano}.</li>")
+    if lin_c:
+        c0, s0 = lin_c[0]
+        dicas.append(f"<li><b>Companhia mais pontual no último fim de ano:</b> {B.link_cia(c0)}, com {pc(s0[3] / s0[2])} no horário. "
+                     f"Veja a pontualidade de cada <a href=\"/companhias/\">companhia</a> e de cada <a href=\"/rotas/\">rota</a> antes de comprar.</li>")
+    if la:
+        dicas.append("<li><b>Aeroportos que mais atrasaram:</b> " + ", ".join(f'<a href="/aeroportos/{B.aero_slug(a)}/">{esc(B.cod(a))}</a>' for a, _ in la[:3]) +
+                     ". Em conexão por eles, prefira um intervalo maior entre os voos.</li>")
+    dicas.append('<li><b>Se o voo atrasar ou for cancelado:</b> a companhia deve dar alimentação a partir de 2 horas de espera e, a partir de 4 horas, '
+                 'reacomodação, reembolso ou outro transporte, mais hotel se precisar passar a noite. Veja <a href="/direitos/voo-cancelado/">o que fazer com voo cancelado</a> '
+                 'e <a href="/direitos/indenizacao-voo-atrasado/">quando cabe indenização</a>.</li>')
+    dicas.append('<li><b>Mala que não chegou:</b> registre no balcão da companhia antes de sair do aeroporto. '
+                 '<a href="/direitos/bagagem-extraviada/">Prazos e indenização da bagagem extraviada</a>.</li>')
+    dicas_card = f'<section class="card"><h2>Dicas para voar no fim de ano de {prox}</h2><ul class="dicas">{"".join(dicas)}</ul></section>'
     pares = [(f"Os voos atrasam mais no fim de ano?",
               f"Entre 19 de dezembro de {ano} e 4 de janeiro de {ano + 1}, {pc(p_pont)} dos voos domésticos chegaram no horário e {pc(p_canc)} foram cancelados.{comp}"),
-             ("Quais foram os piores dias para voar?", f"Os dias com menor pontualidade foram {piores_txt}.")]
+             (f"Quais dias evitar para voar no Natal e Ano-Novo de {prox}?",
+              f"No último fim de ano, os dias com menor pontualidade foram {piores_txt}. Datas próximas ao Natal e ao Réveillon costumam concentrar os voos mais cheios.")]
     if lin_c:
-        c, s = lin_c[0]
+        c, sc = lin_c[0]
         pares.append(("Qual companhia foi mais pontual no fim de ano?",
-                      f"A {B.cia_nome(c)}, com {pc(s[3] / s[2])} dos voos no horário entre 19/12/{ano} e 04/01/{ano + 1}."))
+                      f"A {B.cia_nome(c)}, com {pc(sc[3] / sc[2])} dos voos no horário entre 19/12/{ano} e 04/01/{ano + 1}."))
+    pares.append(("O que fazer se o voo atrasar no fim de ano?",
+                  "As regras são as mesmas do resto do ano: alimentação a partir de 2 horas de espera; a partir de 4 horas, reacomodação, reembolso integral ou outro meio de transporte, e hotel se for preciso passar a noite."))
     faq, ld = faq_html(pares)
-    corpo = f"""<section class="hero"><span class="kicker">Natal e Ano-Novo de {ano}</span><h1>Voos no fim de ano: como foram atrasos e cancelamentos</h1>
-<p class="lead">Entre 19 de dezembro de {ano} e 4 de janeiro de {ano + 1}, <strong>{pc(p_pont)}</strong> dos voos domésticos chegaram no horário e <strong>{pc(p_canc)}</strong> foram cancelados.{comp}{dez_txt}</p></section>
-<div class="tiles">{tile("Chegaram no horário", pc(p_pont), "até 30 min de atraso")}{tile("Cancelados", pc(p_canc), f"{nf(S[1])} voos")}{tile("Voos previstos", nf(S[0]), f"em {len(chaves)} dias")}{tile("Pior dia", f"{piores[0][0].day:02d}/{piores[0][0].month:02d}" if piores else "–", f"{pc(piores[0][1])} no horário" if piores else "")}</div>
-<section class="card"><h2>Dia a dia</h2>{graf}<p class="nota">Em laranja, os 3 dias com menor pontualidade.</p></section>
+    corpo = f"""<section class="hero"><span class="kicker">Natal e Ano-Novo de {prox}</span><h1>Voar no fim de ano de {prox}: o que os últimos Natais mostram</h1>
+<p class="lead">O fim de ano de {prox} ainda não aconteceu, mas o último dá a medida: entre 19 de dezembro de {ano} e 4 de janeiro de {ano + 1}, <strong>{pc(p_pont)}</strong> dos voos domésticos chegaram no horário e <strong>{pc(p_canc)}</strong> foram cancelados.{comp}{dez_txt}</p></section>
+<div class="tiles">{tile("Chegaram no horário", pc(p_pont), f"fim de ano de {ano}")}{tile("Cancelados", pc(p_canc), f"{nf(S[1])} voos")}{tile("Voos previstos", nf(S[0]), f"em {len(chaves)} dias")}{tile("Pior dia", f"{piores[0][0].day:02d}/{piores[0][0].month:02d}" if piores else "–", f"{pc(piores[0][1])} no horário" if piores else "")}</div>
+{dicas_card}
+<section class="card"><h2>Dia a dia no fim de ano de {ano}</h2>{graf}<p class="nota">Em laranja, os 3 dias com menor pontualidade.</p></section>
+{hist_card}
 <div class="grid2">
 <section class="card"><h2>Por companhia</h2><div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Voos</th></tr></thead><tbody>{tab_c}</tbody></table></div></section>
 <section class="card"><h2>Aeroportos com mais atrasos</h2><div class="tw"><table><thead><tr><th scope="col">Aeroporto</th><th scope="col" class="r">No horário</th><th scope="col" class="r">Cancelados</th><th scope="col" class="r">Partidas</th></tr></thead><tbody>{tab_a}</tbody></table></div><p class="nota">Aeroportos com pelo menos 600 partidas no período.</p></section>
 </div>
 {faq}"""
-    return pagina(B, "/fim-de-ano/", f"Voos no fim de ano: atrasos e cancelamentos no Natal e Ano-Novo de {ano} | Voo em Números",
-                  f"Entre 19/12/{ano} e 04/01/{ano + 1}, {pc(p_pont)} dos voos domésticos chegaram no horário e {pc(p_canc)} foram cancelados. Piores dias, companhias e aeroportos.",
+    return pagina(B, "/fim-de-ano/", f"Voos no Natal e Ano-Novo {prox}: atrasos, piores dias e dicas | Voo em Números",
+                  f"Vai voar no fim de ano de {prox}? No último, {pc(p_pont)} dos voos chegaram no horário e {pc(p_canc)} foram cancelados. Piores dias, companhias e aeroportos.",
                   corpo, "/fim-de-ano/", migalhas=[("", "Fim de ano")], jsonld=[ld])
 
 
@@ -1630,7 +1712,7 @@ def pg_direitos(B: Base) -> str:
 <div class="tiles">{tile("Atraso acima de 1 hora", pc(p1), f"{nf(n_a1)} voos")}{tile("Atraso acima de 2 horas", pc(p2), f"{nf(n_a2)} voos")}{tile("Atraso acima de 4 horas", pc(p4), f"{nf(n_a4)} voos")}{tile("Voos cancelados", pc(T.p_canc), f"{nf(T.canc)} voos")}</div>
 <p class="nota">Atraso medido na chegada, com os dados da ANAC. O tempo que você espera no aeroporto pode ser diferente. Os direitos abaixo contam a partir da espera no aeroporto.</p></section>"""
     tabela = """<section class="card"><h2>O que a companhia deve oferecer, hora a hora</h2>
-<div class="tw"><table class="direitos"><thead><tr><th scope="col">Situação</th><th scope="col">O que você pode exigir</th></tr></thead><tbody>
+<div class="tw"><table class="direitos" data-sem-export data-sem-compartilhar><thead><tr><th scope="col">Situação</th><th scope="col">O que você pode exigir</th></tr></thead><tbody>
 <tr><td><b>Assim que o problema é conhecido</b></td><td>Informação clara, por canais digitais e no aeroporto: o que houve, a nova previsão de partida, as alternativas de reacomodação e como pedir assistência. A informação deve mostrar data e hora da última atualização.</td></tr>
 <tr><td><b>Mais de 2 horas de espera</b></td><td>Alimentação adequada: crédito para alimentação, refeição ou solução equivalente.</td></tr>
 <tr><td><b>Mais de 4 horas de espera</b></td><td>Você escolhe entre ser reacomodado em outro voo, receber o reembolso integral da passagem ou seguir viagem por outro meio de transporte. Se for preciso passar a noite, a companhia paga hospedagem e transporte de ida e volta. Se você mora na cidade, pode ficar só com o transporte.</td></tr>
@@ -1689,6 +1771,7 @@ def pg_direitos(B: Base) -> str:
 <p class="lead">Quanto você espera no aeroporto define o que a companhia aérea precisa oferecer. Aqui está o resumo do que vale hoje, com o que muda em cada caso e como reclamar.</p>
 <div class="btns"><a class="btn" href="/companhias/">Ver quais companhias mais atrasam</a><a class="btn sec" href="/mapa/">Ver o mapa de pontualidade</a></div></section>
 {dados}
+{guias_direitos_card()}
 {tabela}
 {blocos}
 {passos}
@@ -1698,6 +1781,270 @@ def pg_direitos(B: Base) -> str:
     return pagina(B, "/direitos/", "Voo atrasado ou cancelado: seus direitos (regras da ANAC 2026) | Voo em Números",
                   "O que a companhia aérea deve oferecer quando o voo atrasa ou é cancelado: alimentação após 2 horas, hospedagem após 4, reembolso e reacomodação. Regras da ANAC em vigor desde 26/10/2026.",
                   corpo, "/direitos/", migalhas=[("", "Direitos do passageiro")], jsonld=[ld])
+
+
+# ---------------------------------------------------------------- direitos: uma página por situação
+# Cada guia responde a uma busca diferente ("voo cancelado o que fazer", "indenização voo atrasado"...).
+# Texto revisado contra a Resolução 400/2016 com as mudanças da 813/2026, a Lei 14.034/2020,
+# a Convenção de Montreal (limites revistos em 28/12/2024) e o Regulamento europeu 261/2004.
+FONTES_GUIAS = {
+    "res400": ("ANAC: direitos dos passageiros (Resolução 400/2016, com as mudanças da 813/2026)", "https://www.gov.br/anac/pt-br/assuntos/passageiros"),
+    "res813": ("ANAC: Anac atualiza regras sobre atrasos e cancelamentos (2026)", "https://www.gov.br/anac/pt-br/noticias/2026/anac-atualiza-regras-sobre-atrasos-e-cancelamentos-e-amplia-deveres-de-informacao-aos-passageiros"),
+    "lei14034": ("Lei 14.034/2020, que mudou o Código Brasileiro de Aeronáutica", "https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2020/lei/l14034.htm"),
+    "montreal": ("Convenção de Montreal (Decreto 5.910/2006)", "https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/decreto/d5910.htm"),
+    "icao": ("OACI: limites da Convenção de Montreal revistos em 28/12/2024", "https://www.icao.int/news/international-air-travel-liability-limits-set-increase-enhancing-customer-compensation-0"),
+    "eu261": ("União Europeia: direitos dos passageiros aéreos (Regulamento 261/2004)", "https://europa.eu/youreurope/citizens/travel/passenger-rights/air/index_pt.htm"),
+    "bcb": ("Banco Central: cotação do DES (Direito Especial de Saque)", "https://www.bcb.gov.br/estabilidadefinanceira/historicocotacoes"),
+    "consumidor": ("consumidor.gov.br, canal oficial de reclamações", "https://www.consumidor.gov.br/"),
+}
+
+GUIAS_DIREITOS = [
+    ("voo-cancelado", "Voo cancelado", "O que fazer na hora e o que a companhia deve oferecer"),
+    ("indenizacao-voo-atrasado", "Indenização por voo atrasado", "Quando cabe, quanto e como pedir"),
+    ("overbooking", "Overbooking", "A compensação de 250 DES e seus direitos"),
+    ("bagagem-extraviada", "Bagagem extraviada", "Prazos para a mala voltar e a indenização"),
+    ("voo-internacional", "Voo internacional", "Regras do Brasil, de Montreal e da Europa"),
+]
+
+
+def guias_direitos_card(atual: str = "") -> str:
+    itens = "".join(f'<li><a href="/direitos/{s}/">{esc(t)}</a> <span class="small">{esc(d)}</span></li>'
+                    for s, t, d in GUIAS_DIREITOS if s != atual)
+    tit = "Outros guias" if atual else "Guias por situação"
+    extra = '<li><a href="/direitos/">Resumo de todos os direitos</a> <span class="small">A tabela hora a hora e o passo a passo para reclamar</span></li>' if atual else ""
+    return f'<section class="card"><h2>{tit}</h2><ul class="guias">{itens}{extra}</ul></section>'
+
+
+def _fontes_guia(chaves) -> str:
+    return ('<section class="card"><h2>Fontes</h2><ul class="fontes">' +
+            "".join(f'<li><a href="{FONTES_GUIAS[k][1]}" rel="noopener nofollow" target="_blank">{esc(FONTES_GUIAS[k][0])}</a></li>' for k in chaves) +
+            f'</ul><p class="nota">Texto revisado em {DIREITOS_REVISAO}. É um guia informativo em linguagem simples e não substitui o texto oficial nem a orientação de um advogado. '
+            'O Voo em Números não tem ligação com a ANAC nem com as companhias aéreas.</p></section>')
+
+
+def _tabela_cias_atraso(B: Base) -> str:
+    """Companhias com mais voos atrasados acima de 2 e de 4 horas, e cancelados, no último mês."""
+    cs = [(c, x) for c, x in B.cia[B.ref].items() if x.prev >= MIN_CIA_RANK and x.med]
+    cs.sort(key=lambda t: -((t[1].b[2] + t[1].b[3]) / t[1].med))
+    lin = "".join(f'<tr><td>{B.link_cia(c)}</td><td class="r num">{pc((x.b[2] + x.b[3]) / x.med)}</td><td class="r num">{pc(x.b[3] / x.med)}</td>'
+                  f'<td class="r num">{pc(x.p_canc)}</td></tr>' for c, x in cs)
+    return (f'<div class="tw"><table><thead><tr><th scope="col">Companhia</th><th scope="col" class="r">Atraso acima de 2 h</th>'
+            f'<th scope="col" class="r">Acima de 4 h</th><th scope="col" class="r">Cancelados</th></tr></thead><tbody>{lin}</tbody></table></div>'
+            f'<p class="nota">Voos domésticos em {mes_nome(B.ref)}. Atraso medido na chegada, com os dados da ANAC.</p>')
+
+
+def _pg_guia(B: Base, slug_: str, titulo: str, descricao: str, kicker: str, h1: str, lead: str, blocos: str, pares, fontes) -> str:
+    faq, ld = faq_html(pares)
+    nome = next(t for s, t, _ in GUIAS_DIREITOS if s == slug_)
+    art = {"@context": "https://schema.org", "@type": "Article", "headline": h1, "inLanguage": "pt-BR",
+           "dateModified": dt.datetime.strptime(DIREITOS_REVISAO, "%d/%m/%Y").date().isoformat(),
+           "author": {"@type": "Organization", "name": "Voo em Números", "url": BASE + "/"},
+           "publisher": {"@type": "Organization", "name": "Voo em Números", "url": BASE + "/"},
+           "mainEntityOfPage": f"{BASE}/direitos/{slug_}/"}
+    corpo = f"""<section class="hero"><span class="kicker">{kicker}</span><h1>{h1}</h1><p class="lead">{lead}</p></section>
+{blocos}
+{guias_direitos_card(slug_)}
+{faq}
+{_fontes_guia(fontes)}"""
+    return pagina(B, f"/direitos/{slug_}/", titulo, descricao, corpo, "/direitos/",
+                  migalhas=[("/direitos/", "Direitos do passageiro"), ("", nome)], jsonld=[ld, art])
+
+
+def pg_voo_cancelado(B: Base) -> str:
+    T = B.tot[B.ref]
+    mes = mes_nome(B.ref)
+    piores = sorted(((a, B.soma(B.aero, a, B.u3)) for a in B.pag_aero), key=lambda t: -(t[1].p_canc or 0))
+    piores = [(a, x) for a, x in piores if x.prev >= 3000][:5]
+    lin_a = "".join(f'<tr><td><a href="/aeroportos/{B.aero_slug(a)}/">{esc(B.cod(a))}</a> <span class="small">{esc(B.aero_nome(a))}</span></td>'
+                    f'<td class="r num"><b>{pc(x.p_canc)}</b></td></tr>' for a, x in piores)
+    blocos = f"""<section class="card"><h2>O que fazer na hora</h2>
+<ol class="passos">
+<li><b>Fale com a companhia antes de sair do portão.</b> Pelo aplicativo ou no balcão, peça a reacomodação no próximo voo. Os lugares acabam rápido quando um voo lotado é cancelado.</li>
+<li><b>Escolha entre as três opções.</b> Você decide: <b>reacomodação</b> (no próximo voo, inclusive de outra companhia, ou numa data que for melhor para você), <b>reembolso integral</b> da passagem ou <b>outro meio de transporte</b>, como ônibus.</li>
+<li><b>Peça a assistência pelo tempo de espera.</b> Alimentação a partir de 2 horas; hotel e transporte se for preciso passar a noite.</li>
+<li><b>Guarde tudo.</b> Print do aviso de cancelamento com a hora, cartão de embarque, notas de gastos e o protocolo do atendimento.</li>
+</ol></section>
+<section class="card"><h2>O que a companhia deve oferecer</h2>
+<div class="tw"><table class="direitos" data-sem-export data-sem-compartilhar><thead><tr><th scope="col">Situação</th><th scope="col">Seu direito</th></tr></thead><tbody>
+<tr><td><b>Cancelamento no aeroporto</b></td><td>Reacomodação, reembolso integral ou outro meio de transporte, à sua escolha. Mais a assistência material: alimentação depois de 2 horas de espera e, se for preciso pernoitar, hospedagem e transporte de ida e volta.</td></tr>
+<tr><td><b>Cancelamento avisado antes</b></td><td>A companhia deve avisar com pelo menos 72 horas de antecedência. Se avisar depois disso, ou se o novo horário for muito diferente (mais de 30 minutos nos voos domésticos, 1 hora nos internacionais) e você não aceitar, pode escolher reacomodação ou reembolso integral.</td></tr>
+<tr><td><b>Reembolso</b></td><td>Integral, inclusive das taxas, em até 7 dias depois do pedido. Pode ser em crédito para outra viagem só se você aceitar.</td></tr>
+<tr><td><b>Mau tempo ou outra força maior</b></td><td>A assistência e as opções continuam valendo. O que muda é a discussão sobre indenização, que depende da causa.</td></tr>
+</tbody></table></div></section>
+<section class="card"><div class="card-head"><h2>Isso acontece com que frequência?</h2><span class="small">{mes}</span></div>
+<p>Em {mes}, <strong>{pc(T.p_canc)}</strong> dos voos domésticos previstos foram cancelados ({nf(T.canc)} voos).</p>
+{_tabela_cias_atraso(B)}
+{f'<h3>Aeroportos com mais cancelamentos</h3><div class="tw"><table><thead><tr><th scope="col">Aeroporto</th><th scope="col" class="r">Cancelados</th></tr></thead><tbody>{lin_a}</tbody></table></div><p class="nota">Últimos 3 meses, aeroportos com pelo menos 3 mil partidas.</p>' if lin_a else ""}
+</section>
+<section class="card"><h2>E a indenização?</h2><p>O reembolso e a assistência são obrigatórios. Indenização por danos é outra coisa: depende de prova do prejuízo e da causa do cancelamento. <a href="/direitos/indenizacao-voo-atrasado/">Veja quando ela cabe</a>.</p></section>"""
+    pares = [("O que fazer quando o voo é cancelado?",
+              "Peça na hora a reacomodação no próximo voo, o reembolso integral ou outro meio de transporte, à sua escolha, e a assistência pelo tempo de espera: alimentação a partir de 2 horas e hotel se for preciso passar a noite."),
+             ("A companhia pode me colocar em voo de outra empresa?",
+              "Sim. A reacomodação pode ser em voo próprio ou de outra companhia, na primeira oportunidade, ou numa data e horário que o passageiro preferir."),
+             ("Em quanto tempo sai o reembolso de voo cancelado?",
+              "O reembolso deve ser integral e feito em até 7 dias depois do pedido. Crédito para outra viagem só vale se o passageiro aceitar."),
+             ("Com quanto tempo a companhia deve avisar o cancelamento?",
+              "Mudanças programadas devem ser informadas com pelo menos 72 horas de antecedência. Se o aviso vier depois, ou o novo horário mudar mais de 30 minutos nos voos domésticos (1 hora nos internacionais), o passageiro que não aceitar pode escolher reacomodação ou reembolso integral."),
+             ("Voo cancelado por mau tempo dá direito a alguma coisa?",
+              "Sim. A assistência material e as opções de reacomodação, reembolso ou outro transporte valem mesmo em caso de força maior. O que fica mais difícil é a indenização.")]
+    return _pg_guia(B, "voo-cancelado", "Voo cancelado: o que fazer e seus direitos (ANAC 2026) | Voo em Números",
+                    f"Voo cancelado? Você escolhe outro voo, reembolso integral em 7 dias ou outro transporte, e a companhia paga alimentação e hotel. Em {mes_curto(B.ref)}, {pc(T.p_canc)} cancelados.",
+                    "Guia · voo cancelado", "Voo cancelado: o que fazer e quais são seus direitos",
+                    "Quando o voo é cancelado, quem escolhe a solução é você: outro voo, o dinheiro de volta ou outro meio de transporte. Enquanto espera, a companhia paga alimentação e, se precisar, hotel.",
+                    blocos, pares, ["res400", "res813", "consumidor"])
+
+
+def pg_indenizacao(B: Base) -> str:
+    T = B.tot[B.ref]
+    mes = mes_nome(B.ref)
+    p2 = (T.b[2] + T.b[3]) / T.med if T.med else None
+    p4 = T.b[3] / T.med if T.med else None
+    blocos = f"""<section class="card"><h2>Assistência e indenização são coisas diferentes</h2>
+<p><b>Assistência</b> é o que a companhia deve dar na hora, sem precisar de processo: alimentação depois de 2 horas de espera; depois de 4 horas, reacomodação, reembolso ou outro transporte, e hotel se for preciso pernoitar. Vale até com mau tempo.</p>
+<p><b>Indenização</b> é o pagamento por um prejuízo, pedido à companhia ou na Justiça. Ela não é automática e não tem valor tabelado no Brasil.</p></section>
+<section class="card"><h2>Quando a indenização costuma caber</h2>
+<ul class="dicas">
+<li><b>Dano material:</b> o que você gastou ou perdeu por causa do atraso e consegue provar. Hotel e refeição que a companhia não deu, diária de hotel ou passeio pago e perdido, outra passagem comprada, um dia de trabalho perdido.</li>
+<li><b>Dano moral:</b> desde a Lei 14.034/2020, que incluiu o artigo 251-A no Código Brasileiro de Aeronáutica, ele <b>precisa ser comprovado</b>. O atraso, sozinho, não basta: os tribunais, inclusive o STJ, pedem um prejuízo concreto. Exemplos que pesam: perder um compromisso importante, ficar muitas horas sem a assistência devida, atraso muito longo com criança ou idoso, perder a conexão e o resto da viagem.</li>
+<li><b>Força maior:</b> atraso por mau tempo, restrição do aeroporto ou ordem de autoridade pode afastar a indenização. A assistência continua obrigatória mesmo assim.</li>
+</ul></section>
+<section class="card"><h2>Como pedir</h2>
+<ol class="passos">
+<li><b>Junte as provas:</b> cartão de embarque, prints com o horário, conversas e protocolos com a companhia, notas fiscais e o que comprove o prejuízo (o compromisso perdido, a reserva paga).</li>
+<li><b>Reclame na companhia</b> e, sem acordo, no consumidor.gov.br. Muitas fazem proposta nessa fase.</li>
+<li><b>Juizado Especial Cível:</b> causas de até 20 salários mínimos não precisam de advogado, e até 40 salários mínimos correm lá com advogado. O prazo para entrar com a ação em voo doméstico é de 5 anos.</li>
+<li><b>Empresas de indenização</b> cuidam do pedido em troca de uma parte do valor. Compare com o Juizado, que é gratuito.</li>
+</ol></section>
+<section class="card"><div class="card-head"><h2>Quantos voos atrasam tanto assim?</h2><span class="small">{mes}</span></div>
+<div class="tiles">{tile("Atraso acima de 2 horas", pc(p2), f"{nf(T.b[2] + T.b[3])} voos")}{tile("Atraso acima de 4 horas", pc(p4), f"{nf(T.b[3])} voos")}{tile("Cancelados", pc(T.p_canc), f"{nf(T.canc)} voos")}</div>
+{_tabela_cias_atraso(B)}</section>
+<section class="card"><h2>Voo internacional</h2><p>Em voos de ou para o exterior valem também a Convenção de Montreal e, nos voos que saem da Europa, a regra europeia, que tem compensação fixa de 250 a 600 euros. <a href="/direitos/voo-internacional/">Veja o guia do voo internacional</a>.</p></section>"""
+    pares = [("Voo atrasado dá direito a indenização?",
+              "Não automaticamente. A assistência (alimentação, hotel, reacomodação ou reembolso) é obrigatória, mas a indenização depende de prova do prejuízo. Desde a Lei 14.034/2020, o dano moral por atraso precisa ser comprovado."),
+             ("Quanto é a indenização por voo atrasado?",
+              "No Brasil não há valor tabelado. O dano material é o gasto ou a perda comprovada; o dano moral, quando reconhecido, é fixado pelo juiz caso a caso. Em voos que saem da União Europeia há compensação fixa de 250 a 600 euros."),
+             ("Quantas horas de atraso dão direito a alguma coisa?",
+              "A partir de 2 horas de espera, alimentação. A partir de 4 horas, reacomodação, reembolso integral ou outro meio de transporte, e hotel se for preciso passar a noite."),
+             ("Qual o prazo para pedir indenização por voo atrasado?",
+              "Em voo doméstico, 5 anos pelo Código de Defesa do Consumidor. Em voo internacional, 2 anos para danos materiais, pela Convenção de Montreal, e 5 anos para dano moral, segundo o STF."),
+             ("Precisa de advogado para pedir indenização?",
+              "No Juizado Especial Cível, não, em causas de até 20 salários mínimos. Antes, vale reclamar na companhia e no consumidor.gov.br.")]
+    return _pg_guia(B, "indenizacao-voo-atrasado", "Indenização por voo atrasado: quando cabe e como pedir (2026) | Voo em Números",
+                    "Voo atrasado dá indenização? A assistência é obrigatória, mas o dano moral precisa de prova desde a Lei 14.034/2020. Veja quando cabe, quanto e como pedir.",
+                    "Guia · indenização", "Indenização por voo atrasado: quando cabe e como pedir",
+                    "A companhia deve assistência a quem espera, sempre. Já a indenização depende do prejuízo que você consegue provar. Veja a diferença, o que pesa a favor e o caminho para pedir.",
+                    blocos, pares, ["res400", "lei14034", "consumidor", "montreal"])
+
+
+def pg_overbooking(B: Base) -> str:
+    blocos = """<section class="card"><h2>O que é overbooking</h2>
+<p>É quando a companhia vende mais passagens do que lugares e alguém fica sem embarcar. A ANAC chama de <b>preterição</b>. Também vale quando o embarque é negado por troca de avião por um menor ou outro motivo operacional, com o passageiro em dia com o check-in e os documentos.</p></section>
+<section class="card"><h2>Primeiro, a companhia procura voluntários</h2>
+<p>Antes de deixar alguém em terra contra a vontade, ela deve oferecer uma compensação a quem aceitar viajar depois. O valor é negociado: pode ser dinheiro, crédito ou milhas. Quem aceita como voluntário não tem direito à compensação fixa abaixo. Leia o que está assinando.</p></section>
+<section class="card"><h2>Se você foi impedido de embarcar</h2>
+<div class="tw"><table class="direitos" data-sem-export data-sem-compartilhar><thead><tr><th scope="col">Direito</th><th scope="col">Como funciona</th></tr></thead><tbody>
+<tr><td><b>Compensação imediata</b></td><td><b>250 DES</b> em voo doméstico e <b>500 DES</b> em voo internacional, pagos na hora, por transferência, voucher ou em dinheiro. O DES é uma moeda de referência do FMI: em novembro de 2026, 1 DES valia perto de R$ 7,50, ou seja, cerca de R$ 1.900 e R$ 3.800.</td></tr>
+<tr><td><b>Reacomodação, reembolso ou outro transporte</b></td><td>À sua escolha, como num cancelamento.</td></tr>
+<tr><td><b>Assistência material</b></td><td>Alimentação depois de 2 horas de espera; hotel e transporte se for preciso pernoitar.</td></tr>
+<tr><td><b>Por escrito</b></td><td>Se pedir, a companhia deve informar por escrito o motivo da preterição.</td></tr>
+</tbody></table></div>
+<p class="nota">Receber a compensação não impede de pedir na Justiça indenização por um prejuízo maior que você consiga provar.</p></section>
+<section class="card"><h2>Como diminuir o risco</h2>
+<ul class="dicas"><li>Faça o check-in assim que abrir e marque o assento.</li><li>Chegue ao portão no horário: quem chega atrasado ao embarque não é preterido, perde o voo.</li>
+<li>Em voo lotado de feriado, confira a <a href="/rotas/">pontualidade da rota</a> e tenha uma opção de volta.</li></ul></section>"""
+    pares = [("Quanto a companhia paga em caso de overbooking?",
+              "Quem é impedido de embarcar contra a vontade recebe na hora 250 DES em voo doméstico e 500 DES em voo internacional, cerca de R$ 1.900 e R$ 3.800 com o DES perto de R$ 7,50, além de reacomodação, reembolso ou outro transporte e assistência material."),
+             ("O que é preterição de passageiro?",
+              "É o nome que a ANAC dá ao overbooking: quando o passageiro com check-in e documentos em ordem é impedido de embarcar porque não há lugar."),
+             ("Quem aceita sair do voo como voluntário tem os mesmos direitos?",
+              "Não. O voluntário recebe a compensação que negociar com a companhia, que pode ser maior ou menor, e não a compensação fixa de 250 ou 500 DES."),
+             ("Posso pedir indenização além da compensação?",
+              "Sim. A compensação imediata não impede o pedido de indenização na Justiça por um prejuízo maior que você consiga provar.")]
+    return _pg_guia(B, "overbooking", "Overbooking: compensação de 250 DES e seus direitos (ANAC) | Voo em Números",
+                    "Overbooking: a companhia paga na hora 250 DES em voo doméstico ou 500 DES no internacional (cerca de R$ 1.900 e R$ 3.800), mais outro voo ou reembolso.",
+                    "Guia · overbooking", "Overbooking: quanto a companhia deve pagar e seus direitos",
+                    "Quem fica em terra contra a vontade recebe uma compensação na hora, além de outro voo ou o dinheiro de volta e a assistência pelo tempo de espera.",
+                    blocos, pares, ["res400", "bcb", "consumidor"])
+
+
+def pg_bagagem(B: Base) -> str:
+    blocos = """<section class="card"><h2>O que fazer antes de sair do aeroporto</h2>
+<ol class="passos">
+<li><b>Vá ao balcão da companhia na área de desembarque</b> e registre a falta da mala. Leve o cartão de embarque e o comprovante da etiqueta da bagagem.</li>
+<li><b>Peça o protocolo</b> (o registro de irregularidade de bagagem) e informe onde quer receber a mala.</li>
+<li><b>Guarde as notas</b> do que precisar comprar enquanto a mala não chega, como roupa e itens de higiene.</li>
+</ol></section>
+<section class="card"><h2>Prazos e valores</h2>
+<div class="tw"><table class="direitos" data-sem-export data-sem-compartilhar><thead><tr><th scope="col">Situação</th><th scope="col">Regra</th></tr></thead><tbody>
+<tr><td><b>Para devolver a mala</b></td><td>Até <b>7 dias</b> em voo doméstico e até <b>21 dias</b> em voo internacional, no endereço que você indicar.</td></tr>
+<tr><td><b>Despesas enquanto espera</b></td><td>Quem está fora de casa tem direito ao ressarcimento das despesas necessárias, como roupa e higiene, em até 7 dias depois de entregar as notas. Esse valor pode ser descontado da indenização final se a mala não aparecer.</td></tr>
+<tr><td><b>Mala não encontrada</b></td><td>Depois do prazo, a mala é considerada perdida e a companhia deve indenizar em até 7 dias.</td></tr>
+<tr><td><b>Limite da indenização</b></td><td>Até <b>1.131 DES</b> por passageiro em voo doméstico e até <b>1.519 DES</b> em voo internacional, pela Convenção de Montreal revista em dezembro de 2024. Com o DES perto de R$ 7,50, cerca de R$ 8.500 e R$ 11.400. Para levar algo de valor maior, faça a declaração especial de valor no check-in.</td></tr>
+<tr><td><b>Mala danificada ou violada</b></td><td>Reclame na companhia em até 7 dias depois de receber. Ela tem 7 dias para consertar, trocar por outra equivalente ou indenizar.</td></tr>
+</tbody></table></div></section>
+<section class="card"><h2>Se a companhia não resolver</h2>
+<p>Registre a reclamação no consumidor.gov.br. Na Justiça, o prazo para pedir indenização é de 5 anos em voo doméstico. Em voo internacional, é de 2 anos para o dano material (Convenção de Montreal) e de 5 anos para o dano moral, segundo o STF. Dano moral por extravio também precisa de prova do prejuízo concreto, como ficar dias sem roupa numa viagem a trabalho.</p></section>"""
+    pares = [("Qual o prazo para a companhia devolver a bagagem extraviada?",
+              "Até 7 dias em voo doméstico e até 21 dias em voo internacional. Depois disso, a mala é considerada perdida e a companhia tem 7 dias para indenizar."),
+             ("Qual o valor da indenização por bagagem extraviada?",
+              "O limite é de 1.131 DES por passageiro em voo doméstico e 1.519 DES em voo internacional (Convenção de Montreal, revista em dezembro de 2024), salvo declaração especial de valor no check-in."),
+             ("A companhia paga o que eu comprar enquanto a mala não chega?",
+              "Quem está fora do seu domicílio tem direito ao ressarcimento das despesas necessárias. Guarde as notas fiscais."),
+             ("O que fazer se a mala chegou danificada?",
+              "Reclame na companhia em até 7 dias depois de receber. Ela deve consertar, trocar por outra equivalente ou indenizar em até 7 dias.")]
+    return _pg_guia(B, "bagagem-extraviada", "Bagagem extraviada: prazos e indenização (ANAC e Montreal) | Voo em Números",
+                    "Mala extraviada: a companhia tem 7 dias (doméstico) ou 21 dias (internacional) para devolver. Depois, indeniza até 1.131 ou 1.519 DES. Veja o que fazer.",
+                    "Guia · bagagem", "Bagagem extraviada: o que fazer, prazos e indenização",
+                    "Registre a falta da mala antes de sair do aeroporto. A companhia tem um prazo para devolver e, se não achar, um prazo para indenizar.",
+                    blocos, pares, ["res400", "montreal", "icao", "consumidor"])
+
+
+def pg_voo_internacional(B: Base) -> str:
+    BI = getattr(B, "inter", None)
+    dado = ""
+    if BI:
+        a = BI.tot.get(BI.ref) if hasattr(BI, "tot") else None
+        if a and a.med:
+            dado = (f'<section class="card"><div class="card-head"><h2>Quanto os voos internacionais atrasam</h2><span class="small">{mes_nome(BI.ref)}</span></div>'
+                    f'<p>Em {mes_nome(BI.ref)}, <strong>{pc(a.p_pont)}</strong> dos voos internacionais entre o Brasil e o exterior chegaram no horário e <strong>{pc(a.p_canc)}</strong> foram cancelados. '
+                    '<a href="/internacionais/">Veja por companhia, rota e voo</a>.</p></section>')
+    blocos = f"""<section class="card"><h2>Quais regras valem</h2>
+<div class="tw"><table class="direitos" data-sem-export data-sem-compartilhar><thead><tr><th scope="col">Regra</th><th scope="col">Quando vale e o que garante</th></tr></thead><tbody>
+<tr><td><b>ANAC (Brasil)</b></td><td>Voos que saem do Brasil, de qualquer companhia: alimentação depois de 2 horas de espera; depois de 4 horas, reacomodação, reembolso ou outro transporte, e hotel se for preciso pernoitar. Overbooking: 500 DES na hora.</td></tr>
+<tr><td><b>Convenção de Montreal</b></td><td>Danos materiais em voos internacionais. Limites revistos em 28/12/2024: até <b>6.303 DES</b> por atraso do passageiro e até <b>1.519 DES</b> por bagagem. Prazo para ação por dano material: 2 anos.</td></tr>
+<tr><td><b>Dano moral</b></td><td>O STF decidiu (Tema 1.240) que as Convenções de Varsóvia e Montreal não se aplicam ao dano moral em voo internacional: vale o Código de Defesa do Consumidor, sem o teto das convenções e com prazo de 5 anos. Ele também depende de prova do prejuízo.</td></tr>
+<tr><td><b>Regra europeia (261/2004)</b></td><td>Voos que saem de um aeroporto da União Europeia, de qualquer companhia, e voos que chegam à União Europeia em companhia europeia. Compensação fixa se o voo chegar 3 horas ou mais atrasado ou for cancelado com menos de 14 dias de aviso, salvo circunstância extraordinária, como mau tempo.</td></tr>
+</tbody></table></div></section>
+<section class="card"><h2>Quanto paga a regra europeia</h2>
+<div class="tw"><table data-sem-export data-sem-compartilhar><thead><tr><th scope="col">Distância do voo</th><th scope="col" class="r">Valor</th></tr></thead><tbody>
+<tr><td>Até 1.500 km</td><td class="r num">€ 250</td></tr><tr><td>De 1.500 a 3.500 km</td><td class="r num">€ 400</td></tr>
+<tr><td>Acima de 3.500 km (Europa–Brasil)</td><td class="r num"><b>€ 600</b></td></tr></tbody></table></div>
+<p class="nota">Nos voos acima de 3.500 km, o valor cai pela metade se a companhia oferecer outro voo que chegue com até 4 horas de atraso. A União Europeia aprovou em 2026 uma revisão dessa regra (Regulamento 2026/2202), que só passa a valer no segundo semestre de 2027 e mantém as 3 horas e os valores. Até lá, vale a regra atual.</p></section>
+<section class="card"><h2>Exemplos</h2>
+<ul class="dicas">
+<li><b>Lisboa → São Paulo, qualquer companhia, chegou 5 horas atrasado por problema técnico:</b> cabe a compensação europeia de 600 euros, além da assistência.</li>
+<li><b>São Paulo → Lisboa em companhia europeia, cancelado no dia:</b> também cabe a regra europeia, porque o voo chega à União Europeia numa companhia europeia.</li>
+<li><b>São Paulo → Lisboa em companhia brasileira, atrasado:</b> a regra europeia não vale. Valem a ANAC, Montreal e a lei brasileira.</li>
+<li><b>São Paulo → Miami, atrasado:</b> valem a ANAC na saída, Montreal e a lei brasileira. Os Estados Unidos não têm compensação fixa por atraso.</li>
+</ul></section>
+{dado}"""
+    pares = [("Voo internacional atrasado dá direito a indenização?",
+              "Depende da rota. Voos que saem da União Europeia, ou chegam lá em companhia europeia, pagam compensação fixa de 250 a 600 euros a partir de 3 horas de atraso na chegada, salvo circunstância extraordinária. Nos demais, a indenização depende de prova do prejuízo, pela Convenção de Montreal e pela lei brasileira."),
+             ("Quanto a companhia paga por voo atrasado vindo da Europa?",
+              "Em voos acima de 3.500 km, como Europa–Brasil, a compensação é de 600 euros se o voo chegar 3 horas ou mais atrasado. Ela cai à metade se a companhia oferecer outro voo que chegue com até 4 horas de atraso."),
+             ("Qual o limite da Convenção de Montreal para atraso?",
+              "Desde 28 de dezembro de 2024, até 6.303 DES por passageiro para danos materiais causados por atraso, e até 1.519 DES por bagagem."),
+             ("A nova regra europeia de 2026 já vale?",
+              "Não. A revisão aprovada em 2026 só passa a valer no segundo semestre de 2027. Até lá vale o Regulamento 261/2004.")]
+    return _pg_guia(B, "voo-internacional", "Voo internacional atrasado ou cancelado: seus direitos (2026) | Voo em Números",
+                    "Voo internacional atrasado: quando cabem os 600 euros da regra europeia, os limites da Convenção de Montreal e as regras da ANAC. Com exemplos.",
+                    "Guia · voo internacional", "Voo internacional atrasado ou cancelado: quais são seus direitos",
+                    "Num voo internacional, podem valer três regras ao mesmo tempo: a da ANAC, a Convenção de Montreal e, se o voo tem ligação com a Europa, a regra europeia, a única com valor fixo.",
+                    blocos, pares, ["res400", "montreal", "icao", "eu261"])
+
+
+PAGINAS_DIREITOS = {"voo-cancelado": pg_voo_cancelado, "indenizacao-voo-atrasado": pg_indenizacao, "overbooking": pg_overbooking,
+                    "bagagem-extraviada": pg_bagagem, "voo-internacional": pg_voo_internacional}
 
 
 # ---------------------------------------------------------------- mapa
@@ -2503,10 +2850,38 @@ def carrega_clima() -> dict:
         return {}
 
 
-def clima_aeros(B: Base, aeros):
-    """Clima de uma cidade: estação do Inmet quando existe; senão NASA POWER do aeroporto mais movimentado."""
-    C = getattr(B, "clima", {}) or {}
-    ordem = sorted(aeros, key=lambda a: -(B.soma(B.chg, a, B.u3).prev))
+DESTINOS_ARQ = RAIZ / "data" / "destinos.json"
+
+
+def carrega_destinos() -> tuple[list, dict]:
+    """Destinos turísticos sem aeroporto (data/destinos.json) e o clima já baixado para eles."""
+    try:
+        lista = json.loads(DESTINOS_ARQ.read_text(encoding="utf-8"))["destinos"]
+    except (OSError, ValueError, KeyError):
+        return [], {}
+    try:
+        clima = json.loads(CLIMA_ARQ.read_text(encoding="utf-8")).get("destinos", {})
+    except (OSError, ValueError):
+        clima = {}
+    return lista, clima
+
+
+def dist_km(lat1, lon1, lat2, lon2) -> float:
+    import math
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 6371 * 2 * math.asin(math.sqrt(a))
+
+
+def clima_aeros(B: Base, aeros, C=None):
+    """Clima de uma cidade: estação do Inmet quando existe; senão NASA POWER do aeroporto mais movimentado.
+    Com C (clima de um destino sem aeroporto, {slug: registro}), usa o registro do próprio destino."""
+    if C is not None:
+        ordem = list(C)
+    else:
+        C = getattr(B, "clima", {}) or {}
+        ordem = sorted(aeros, key=lambda a: -(B.soma(B.chg, a, B.u3).prev))
     for fonte in ("inmet", "nasa"):
         for a in ordem:
             reg = C.get(a, {}).get(fonte)
@@ -2577,7 +2952,36 @@ def _lista_meses(idx) -> str:
 
 def quando_dados(B: Base, s: str):
     c = B.cid[s]
-    cl = clima_aeros(B, c["aeros"])
+    return _quando_q(B, c, clima_aeros(B, c["aeros"]))
+
+
+def quando_dados_destino(B: Base, d: dict):
+    """Destino sem aeroporto: clima do próprio destino; voos, passageiros e passagens da cidade de acesso."""
+    reg = (getattr(B, "clima_dest", {}) or {}).get(d["slug"])
+    if not reg:
+        return None
+    via = next((cid_slug(B, a) for a in d["aeros"] if cid_slug(B, a) in B.cid), None)
+    if not via:
+        return None
+    cv = B.cid[via]
+    coords = getattr(B, "coords", {}) or {}
+    a0 = next((a for a in d["aeros"] if a in cv["aeros"]), cv["aeros"][0])
+    km = dist_km(d["lat"], d["lon"], coords[a0]["lat"], coords[a0]["lon"]) if a0 in coords else None
+    c = {"nome": d["nome"], "uf": d["uf"], "aeros": cv["aeros"], "chg": cv["chg"], "dest": d, "via": via, "via_aero": a0, "km": km}
+    q = _quando_q(B, c, clima_aeros(B, [], C={d["slug"]: reg}))
+    if q:
+        # o movimento do aeroporto de acesso não mede a temporada do destino (Caxias do Sul não é Gramado):
+        # aqui, melhores meses só pela chuva, e nada de "alta temporada"
+        q["pax"] = [None] * 12
+        q["cheio"] = q["vazio"] = None
+        ch = q["cl"]["chuva"]
+        ok = sorted(x for x in ch if x is not None)
+        med = ok[len(ok) // 2] if ok else None
+        q["bons"] = [i for i in range(12) if med is not None and ch[i] is not None and ch[i] <= med] or sorted(_top(ch, 3))
+    return q
+
+
+def _quando_q(B: Base, c: dict, cl):
     if not cl:
         return None
     preco, pax, pont, rot = quando_series(B, c["aeros"])
@@ -2631,9 +3035,12 @@ def quando_origens(B: Base, aeros, rota_pag, n=8):
 
 
 def pg_quando(B: Base, s: str, rota_pag) -> str:
-    q = quando_dados(B, s)
+    q = B.quando_dados[s]
     c, cl = q["c"], q["cl"]
     nome, uf, aeros = c["nome"], c["uf"], c["aeros"]
+    dest = c.get("dest")
+    via_nome = B.cid[c["via"]]["nome"] if dest else nome
+    via_cod = B.cod(c["via_aero"]) if dest else ""
     tmax, tmin, chuva = cl["tmax"], cl["tmin"], cl["chuva"]
     preco, pax, pont = q["preco"], q["pax"], q["pont"]
     secos, chuvosos = _top(chuva, 3), _top(chuva, 3, True)
@@ -2646,13 +3053,16 @@ def pg_quando(B: Base, s: str, rota_pag) -> str:
         lin.append(f'<tr{" class=bom" if i in q["bons"] else ""}><td><b>{MES_ABR[i]}</b></td><td class="num">{t}</td>'
                    f'<td class="num {ch_cls}">{nf(chuva[i]) + " mm" if chuva[i] is not None else "–"}'
                    f'{dc}</td>'
-                   f'<td class="num{" vv-atr" if i in cheios else ""}">{abrevia(pax[i]) if pax[i] else "–"}</td>'
+                   + ("" if dest else f'<td class="num{" vv-atr" if i in cheios else ""}">{abrevia(pax[i]) if pax[i] else "–"}</td>') +
                    f'<td class="num">{pc(pont[i], 0) if pont[i] is not None else "–"}</td></tr>')
     bons_txt = _lista_meses(q["bons"])
     frases = [f"Pelos números, os meses que juntam menos chuva e menos movimento que a média do ano em {esc(nome)} são <strong>{bons_txt}</strong>."
               if q["cheio"] is not None else f"Os meses com menos chuva em {esc(nome)} são <strong>{_lista_meses(secos)}</strong>."]
     frases.append(f"O mais chuvoso é {MESES[q['chuvoso']]} ({nf(chuva[q['chuvoso']])} mm)"
-                  + (f" e o de mais passageiros chegando é {MESES[q['cheio']]}" if q["cheio"] is not None else "") + ".")
+                  + (f" e o de mais passageiros chegando {'ao aeroporto de ' + esc(via_nome) if dest else ''} é {MESES[q['cheio']]}".replace("  ", " ") if q["cheio"] is not None else "") + ".")
+    if dest:
+        frases.append(f"{esc(nome)} não tem voos regulares: o aeroporto mais usado é o de <strong>{esc(via_nome)} ({esc(via_cod)})</strong>"
+                      + (f", a cerca de {nf(round(c['km'] / 5) * 5)} km em linha reta" if c.get("km") else "") + ".")
     tiles = (tile("Mês mais seco", cap(MESES[q["seco"]]), f"{nf(chuva[q['seco']])} mm de chuva")
              + tile("Mês mais chuvoso", cap(MESES[q["chuvoso"]]), f"{nf(chuva[q['chuvoso']])} mm de chuva")
              + (tile("Mais movimentado", cap(MESES[q["cheio"]]), f"{abrevia(pax[q['cheio']])} passageiros chegando") if q["cheio"] is not None else
@@ -2664,27 +3074,29 @@ def pg_quando(B: Base, s: str, rota_pag) -> str:
         est = re.sub(r"\(([a-zà-ú])", lambda m: "(" + m.group(1).upper(), titulo_pt(cl["estacao"]))
         fonte_cl = f"Clima: Normais Climatológicas 1991–2020 do Inmet, estação {esc(est)} (médias de 30 anos)."
     else:
-        fonte_cl = ("Clima: médias de 2001–2020 do NASA POWER para a região do aeroporto, estimadas por satélite e modelo "
+        fonte_cl = (f"Clima: médias de 2001–2020 do NASA POWER para a região {'de ' + esc(nome) if dest else 'do aeroporto'}, estimadas por satélite e modelo "
                     "(média das máximas e mínimas diárias). São valores aproximados, que servem para comparar os meses entre si: "
                     "perto do mar e na serra a temperatura pode variar alguns graus e a chuva medida no local costuma ser maior.")
     notas = [fonte_cl]
-    if "pax" in rot:
+    if "pax" in rot and not dest:
         notas.append(f"Passageiros: chegadas em voos domésticos regulares entre {mes_curto(rot['pax'][0])} e {mes_curto(rot['pax'][1])} (ANAC).")
-    notas.append(f"No horário: voos que chegaram a {esc(nome)} até 30 minutos depois do previsto, entre {mes_curto(rot['pont'][0])} e {mes_curto(rot['pont'][1])}. "
-                 "Em verde, os 3 meses de menos chuva; em laranja, os 3 de mais chuva e os 3 de mais passageiros (alta temporada). Linhas destacadas: menos chuva e menos movimento que a média do ano.")
+    notas.append(f"No horário: voos que chegaram a {esc(via_nome)} até 30 minutos depois do previsto, entre {mes_curto(rot['pont'][0])} e {mes_curto(rot['pont'][1])}. "
+                 + ("Em verde, os 3 meses de menos chuva; em laranja, os 3 de mais chuva. Linhas destacadas: chuva abaixo da metade do ano." if dest else
+                    "Em verde, os 3 meses de menos chuva; em laranja, os 3 de mais chuva e os 3 de mais passageiros (alta temporada). Linhas destacadas: menos chuva e menos movimento que a média do ano."))
+    nome_p = f"{nome} (voando para {via_nome})" if dest else nome
     compra_html = ""
     if q["barato"] is not None:
         mx = max(p for p in preco if p is not None)
         barras = "".join(
             f'<div class="qb"><span>{MES_ABR[i]}</span><i style="width:{(preco[i] / mx * 100) if preco[i] else 0:.0f}%" class="{"ok" if i == q["barato"] else "ruim" if i == q["caro"] else ""}"></i>'
             f'<b class="num">{rs(preco[i]) if preco[i] is not None else "–"}</b></div>' for i in range(12))
-        compra_html = (f'<section class="card" id="quando-comprar"><div class="card-head"><h2>Quando comprar a passagem para {esc(nome)}</h2><span class="small">Tarifa média pelo mês da compra</span></div>'
-                       f'<p>Nos últimos 12 meses, quem comprou passagem para {esc(nome)} em <b>{MESES[q["barato"]]}</b> pagou em média <b>{rs(preco[q["barato"]])}</b>; '
+        compra_html = (f'<section class="card" id="quando-comprar"><div class="card-head"><h2>Quando comprar a passagem para {esc(nome_p)}</h2><span class="small">Tarifa média pelo mês da compra</span></div>'
+                       f'<p>Nos últimos 12 meses, quem comprou passagem para {esc(nome_p)} em <b>{MESES[q["barato"]]}</b> pagou em média <b>{rs(preco[q["barato"]])}</b>; '
                        f'em {MESES[q["caro"]]}, <b>{rs(preco[q["caro"]])}</b>.</p><div class="qbs">{barras}</div>'
-                       f'<p class="nota">A ANAC informa o mês em que a passagem foi vendida, não o da viagem. Bilhetes vendidos para {esc(nome)} entre '
+                       f'<p class="nota">A ANAC informa o mês em que a passagem foi vendida, não o da viagem. Bilhetes vendidos para {esc(nome_p)} entre '
                        f'{mes_curto(rot["preco"][0])} e {mes_curto(rot["preco"][1])}, corrigidos pela inflação.</p></section>')
     orig = quando_origens(B, aeros, rota_pag)
-    orig_html = (f'<section class="card"><div class="card-head"><h2>Passagem para {esc(nome)} saindo de cada cidade</h2><span class="small">Média de 12 meses</span></div>'
+    orig_html = (f'<section class="card"><div class="card-head"><h2>Passagem para {esc(nome_p)} saindo de cada cidade</h2><span class="small">Média de 12 meses</span></div>'
                  f'<div class="tw"><table class="qo"><thead><tr><th scope="col">Saindo de</th><th scope="col" class="r">Passagem média</th><th scope="col" class="r">Compra mais barata em</th></tr></thead>'
                  f'<tbody>{orig}</tbody></table></div><p class="nota">Rotas diretas com mais bilhetes vendidos. Preço médio corrigido pela inflação; o mês indicado é o da compra com menor tarifa média nos últimos 12 meses.</p></section>') if orig else ""
     pares = [(f"Qual a melhor época para ir a {nome}?",
@@ -2702,36 +3114,52 @@ def pg_quando(B: Base, s: str, rota_pag) -> str:
                       f"Pelo movimento nos aeroportos, {MESES[q['cheio']]} é o mês com mais passageiros chegando a {nome} "
                       f"({abrevia(pax[q['cheio']])}) e {MESES[q['vazio']]} o mais tranquilo ({abrevia(pax[q['vazio']])})."))
     faq, ld = faq_html(pares)
+    # destinos turísticos que usam este aeroporto (ou, num destino, os outros do mesmo aeroporto)
+    base_via = c.get("via", s)
+    perto = [k for k, x in B.quando_dados.items() if x["c"].get("dest") and x["c"]["via"] == base_via and k != s]
+    if dest and base_via in B.quando_dados:
+        perto.insert(0, base_via)
+    perto_html = ("" if not perto else
+                  f'<section class="card"><h2>{"Outros destinos pelo mesmo aeroporto" if dest else "Destinos perto de " + esc(nome)}</h2><ul class="lista-voos">' +
+                  "".join(f'<li><a href="/quando-ir/{k}/">{esc(B.quando_dados[k]["c"]["nome"])}</a></li>' for k in perto) + "</ul></section>")
     corpo = f"""<section class="hero"><span class="kicker">Quando ir · {esc(UF_NOME.get(uf, uf))}</span><h1>Melhor época para ir a {esc(nome)} ({esc(uf)})</h1>
 <p class="lead">{" ".join(frases)}</p>
-<div class="btns"><a class="btn sec" href="/cidades/{s}/">Voos em {esc(nome)}: atrasos e cancelamentos</a><a class="btn sec" href="/quando-ir/">Outros destinos</a></div></section>
+<div class="btns"><a class="btn sec" href="/cidades/{c.get("via", s)}/">Voos em {esc(via_nome)}: atrasos e cancelamentos</a><a class="btn sec" href="/quando-ir/">Outros destinos</a></div></section>
 <div class="tiles">{tiles}</div>
 {linha_destino(B, aeros[0], quando=False)}
 <section class="card" id="mes-a-mes"><div class="card-head"><h2>{esc(nome)} mês a mês</h2><span class="small">Clima e movimento</span></div>
-<div class="tw"><table class="qi"><thead><tr><th scope="col">Mês</th><th scope="col">Máx / mín</th><th scope="col">Chuva</th><th scope="col">Chegadas</th><th scope="col">No horário</th></tr></thead><tbody>{"".join(lin)}</tbody></table></div>
+<div class="tw"><table class="qi"><thead><tr><th scope="col">Mês</th><th scope="col">Máx / mín</th><th scope="col">Chuva</th>{"" if dest else '<th scope="col">Chegadas</th>'}<th scope="col">No horário{(" em " + esc(via_cod)) if dest else ""}</th></tr></thead><tbody>{"".join(lin)}</tbody></table></div>
 <p class="nota">{" ".join(notas)}</p></section>
 {compra_html}
 {orig_html}
+{perto_html}
 {faq}"""
     desc = (f"{cap(MESES[q['seco']])} é o mês mais seco em {nome} ({nf(chuva[q['seco']])} mm) e {MESES[q['chuvoso']]} o mais chuvoso."
             + (f" Alta temporada em {MESES[q['cheio']]}." if q["cheio"] is not None else "")
-            + " Veja temperatura, chuva, movimento mês a mês e quando a passagem sai mais barata.")
-    return pagina(B, f"/quando-ir/{s}/", f"Melhor época para ir a {nome}: clima, chuva e preço da passagem mês a mês",
+            + (f" Voos por {via_nome}." if dest else "")
+            + " Clima e passagem mês a mês.")
+    tit_q = f"Melhor época para ir a {nome}: clima e preço da passagem mês a mês"
+    if len(tit_q) > 62:
+        tit_q = f"Melhor época para ir a {nome}: clima e preço mês a mês"
+    if len(tit_q) > 62:
+        tit_q = f"Melhor época para ir a {nome}"
+    return pagina(B, f"/quando-ir/{s}/", tit_q,
                   desc, corpo, "/quando-ir/", migalhas=[("/quando-ir/", "Quando ir"), ("", nome)], jsonld=[ld],
                   continuar=itens_cidade(B, aeros[0]))
 
 
 def pg_quando_idx(B: Base) -> str:
-    itens = sorted(B.quando, key=lambda s: -(B.cid[s]["chg"].prev))
+    itens = sorted(B.quando, key=lambda s: (B.quando_dados[s]["c"].get("dest") is not None, -(B.quando_dados[s]["c"]["chg"].prev)))
     lin = []
     for s in itens:
         q = B.quando_dados[s]
         c = q["c"]
-        lin.append(f'<tr><td class="wrap"><a href="/quando-ir/{s}/">{esc(c["nome"])}</a> <span class="small">{esc(c["uf"])}</span></td>'
+        via = f' <span class="small">· voos por {esc(B.cid[c["via"]]["nome"])}</span>' if c.get("dest") else ""
+        lin.append(f'<tr><td class="wrap"><a href="/quando-ir/{s}/">{esc(c["nome"])}</a> <span class="small">{esc(c["uf"])}</span>{via}</td>'
                    f'<td>{MES_ABR[q["seco"]]}</td><td>{MES_ABR[q["vazio"]] if q["vazio"] is not None else "–"}</td>'
                    f'<td class="wrap small">{", ".join(MES_ABR[i] for i in q["bons"])}</td></tr>')
     corpo = f"""<section class="hero"><span class="kicker">Quando ir</span><h1>Melhor época para viajar: clima e preço da passagem por destino</h1>
-<p class="lead">Para cada cidade com aeroporto: chuva e temperatura de cada mês, o movimento de passageiros e quando a passagem sai mais barata, com dados do Inmet e da ANAC. Escolha o destino para ver mês a mês.</p></section>
+<p class="lead">Para cada cidade com aeroporto, e para destinos turísticos como Gramado, Porto de Galinhas e Arraial do Cabo pelo aeroporto de acesso: chuva e temperatura de cada mês, o movimento de passageiros e quando a passagem sai mais barata, com dados do Inmet, da NASA e da ANAC. Escolha o destino para ver mês a mês.</p></section>
 <section class="card"><div class="card-head"><h2>{nf(len(itens))} destinos</h2><span class="small">Do mais ao menos movimentado</span></div>
 <div class="tw"><table class="qo"><thead><tr><th scope="col">Destino</th><th scope="col">Menos chuva</th><th scope="col">Menos movimento</th><th scope="col">Melhores meses</th></tr></thead><tbody>{"".join(lin)}</tbody></table></div>
 <p class="nota">Melhores meses = chuva e movimento de passageiros abaixo da metade do ano da própria cidade. Clima: Inmet (normais 1991–2020) ou NASA POWER onde não há estação; movimento: passageiros que chegaram em voos domésticos nos últimos 12 meses (ANAC).</p></section>"""
@@ -3896,7 +4324,7 @@ def escreve(caminho: str, conteudo: str):
     p.write_text(conteudo, encoding="utf-8")
 
 
-LLMS_TXT = '# Voo em Números\n\n> Pontualidade, atrasos e cancelamentos dos voos domésticos regulares no Brasil, por companhia aérea, aeroporto, rota e número de voo, com base nos dados públicos da ANAC.\n\nConsidera atrasado o voo que chega mais de 30 minutos depois do horário previsto, o mesmo corte da ANAC. Cada página mostra percentual no horário, cancelamentos, atraso médio e ranking. Os números descrevem o passado e não garantem o desempenho de um voo específico.\n\n## Principais páginas\n- [Resumo do mês](__BASE__/resumo/): panorama dos voos domésticos\n- [Companhias aéreas](__BASE__/companhias/): pontualidade e cancelamentos por empresa\n- [Aeroportos](__BASE__/aeroportos/): atrasos e cancelamentos por aeroporto\n- [Cidades e estados](__BASE__/cidades/): voos que saem e chegam em cada cidade, com destinos e companhias\n- [Rankings](__BASE__/rankings/): aeroportos, rotas e voos que mais atrasam, cancelam e cumprem o horário\n- [Rotas](__BASE__/rotas/): desempenho de cada ligação entre aeroportos\n- [Voos internacionais](__BASE__/internacionais/): pontualidade dos voos entre o Brasil e o exterior, por companhia, rota e número de voo\n- [Preços](__BASE__/precos/): tarifa média das passagens, evolução em 13 meses, curva de preços e rotas mais caras e mais baratas (tarifas da ANAC)\n- [Demanda](__BASE__/demanda/): passageiros, assentos e ocupação\n- [Quando ir](__BASE__/quando-ir/): melhor época para cada destino, com clima (Inmet), preço da passagem e movimento mês a mês\n- [Mapa](__BASE__/mapa/): visão geográfica da malha\n- [Fim de ano](__BASE__/fim-de-ano/): o que esperar dos voos nas festas\n- [Direitos do passageiro](__BASE__/direitos/): o que fazer em caso de atraso ou cancelamento\n- [Como funciona](__BASE__/sobre/): fonte, método e limitações\n\n## Fonte e atualização\n- Voos: base Voo Regular Ativo (VRA), da ANAC, atualizada todo mês.\n- Passageiros e ocupação: base Dados Estatísticos do Transporte Aéreo, da ANAC, com cerca de dois meses de atraso.\n- Entram voos regulares de passageiros: domésticos e, numa seção à parte, internacionais (Brasil ↔ exterior). Ficam de fora voos só de carga e táxi aéreo.\n- A base não informa o motivo do atraso nem se o cancelamento foi avisado com antecedência.\n\n## Como citar\n- Cite o nome do portal e o link da página usada. Os dados são públicos e os links levam à fonte oficial.\n- Cada página mostra o período dos dados. Informe o período ao usar um número.\n- O portal é independente e não tem ligação com governo, empresas ou instituições financeiras.\n\n## Família em Números\nPortais independentes de dados públicos do Brasil: Óleo em Números (https://oleoemnumeros.com.br), Comex em Números (https://comexemnumeros.com.br), Voo em Números (https://vooemnumeros.com.br), Economia em Números (https://economiaemnumeros.com.br) e Imóveis em Números (https://imoveisemnumeros.com.br).\n\n## Contato\n- Erros, sugestões e pedidos de dados: __BASE__/contato/\n'
+LLMS_TXT = '# Voo em Números\n\n> Pontualidade, atrasos e cancelamentos dos voos domésticos regulares no Brasil, por companhia aérea, aeroporto, rota e número de voo, com base nos dados públicos da ANAC.\n\nConsidera atrasado o voo que chega mais de 30 minutos depois do horário previsto, o mesmo corte da ANAC. Cada página mostra percentual no horário, cancelamentos, atraso médio e ranking. Os números descrevem o passado e não garantem o desempenho de um voo específico.\n\n## Principais páginas\n- [Resumo do mês](__BASE__/resumo/): panorama dos voos domésticos\n- [Companhias aéreas](__BASE__/companhias/): pontualidade e cancelamentos por empresa\n- [Aeroportos](__BASE__/aeroportos/): atrasos e cancelamentos por aeroporto\n- [Cidades e estados](__BASE__/cidades/): voos que saem e chegam em cada cidade, com destinos e companhias\n- [Rankings](__BASE__/rankings/): aeroportos, rotas e voos que mais atrasam, cancelam e cumprem o horário\n- [Rotas](__BASE__/rotas/): desempenho de cada ligação entre aeroportos\n- [Voos internacionais](__BASE__/internacionais/): pontualidade dos voos entre o Brasil e o exterior, por companhia, rota e número de voo\n- [Preços](__BASE__/precos/): tarifa média das passagens, evolução em 13 meses, curva de preços e rotas mais caras e mais baratas (tarifas da ANAC)\n- [Demanda](__BASE__/demanda/): passageiros, assentos e ocupação\n- [Quando ir](__BASE__/quando-ir/): melhor época para cada destino, com clima (Inmet), preço da passagem e movimento mês a mês\n- [Mapa](__BASE__/mapa/): visão geográfica da malha\n- [Fim de ano](__BASE__/fim-de-ano/): o que esperar dos voos nas festas\n- [Direitos do passageiro](__BASE__/direitos/): o que fazer em caso de atraso ou cancelamento\n- Guias por situação: [voo cancelado](__BASE__/direitos/voo-cancelado/), [indenização por voo atrasado](__BASE__/direitos/indenizacao-voo-atrasado/), [overbooking](__BASE__/direitos/overbooking/), [bagagem extraviada](__BASE__/direitos/bagagem-extraviada/) e [voo internacional](__BASE__/direitos/voo-internacional/)\n- [Como funciona](__BASE__/sobre/): fonte, método e limitações\n\n## Fonte e atualização\n- Voos: base Voo Regular Ativo (VRA), da ANAC, atualizada todo mês.\n- Passageiros e ocupação: base Dados Estatísticos do Transporte Aéreo, da ANAC, com cerca de dois meses de atraso.\n- Entram voos regulares de passageiros: domésticos e, numa seção à parte, internacionais (Brasil ↔ exterior). Ficam de fora voos só de carga e táxi aéreo.\n- A base não informa o motivo do atraso nem se o cancelamento foi avisado com antecedência.\n\n## Como citar\n- Cite o nome do portal e o link da página usada. Os dados são públicos e os links levam à fonte oficial.\n- Cada página mostra o período dos dados. Informe o período ao usar um número.\n- O portal é independente e não tem ligação com governo, empresas ou instituições financeiras.\n\n## Família em Números\nPortais independentes de dados públicos do Brasil: Óleo em Números (https://oleoemnumeros.com.br), Comex em Números (https://comexemnumeros.com.br), Voo em Números (https://vooemnumeros.com.br), Economia em Números (https://economiaemnumeros.com.br) e Imóveis em Números (https://imoveisemnumeros.com.br).\n\n## Contato\n- Erros, sugestões e pedidos de dados: __BASE__/contato/\n'
 
 
 # ---------------------------------------------------------------- voos internacionais (linha "I" da VRA)
@@ -4402,6 +4830,21 @@ def main() -> int:
             dq = None
         if dq:
             B.quando_dados[s_q] = dq
+    B.destinos, B.clima_dest = carrega_destinos()
+    try:
+        B.coords = json.loads(IATA_ARQ.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        B.coords = {}
+    for d_ in B.destinos:
+        if d_["slug"] in B.cid:   # virou cidade com aeroporto: a página da cidade já cobre
+            continue
+        try:
+            dq = quando_dados_destino(B, d_)
+        except Exception as e:  # noqa: BLE001
+            print(f"Aviso: quando ir {d_['slug']}: {e}")
+            dq = None
+        if dq:
+            B.quando_dados[d_["slug"]] = dq
     B.quando = set(B.quando_dados)
     if not B.quando:  # sem clima baixado ainda: o menu não aponta para página que não existe
         NAV[:] = [x for x in NAV if x[0] != "/quando-ir/"]
@@ -4412,6 +4855,7 @@ def main() -> int:
     fim = periodo_fim(B)
     # páginas fixas que existem (o bloco "Continue explorando" só liga a páginas existentes)
     B.fixas = {"/", "/companhias/", "/aeroportos/", "/rotas/", "/direitos/", "/mapa/", "/resumo/", "/cidades/", "/rankings/"}
+    B.fixas |= {f"/direitos/{s_g}/" for s_g, _, _ in GUIAS_DIREITOS}
     if B.inter:
         B.fixas.add("/internacionais/")
     if fim:
@@ -4423,7 +4867,13 @@ def main() -> int:
 
     urls = []
 
+    fora_do_google = set()   # páginas que existem para quem navega, mas com dado fraco demais para a busca
+
     def pub(caminho, conteudo, prio="0.6"):
+        if caminho in fora_do_google:
+            conteudo = conteudo.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n<meta name="robots" content="noindex, follow">', 1)
+            escreve(caminho, conteudo)
+            return
         escreve(caminho, conteudo)
         urls.append((caminho, prio))
 
@@ -4456,6 +4906,15 @@ def main() -> int:
         pub(f"/companhias/{B.cia_slug(c_)}/{B.aero_slug(a_)}/", pg_cia_aero(B, c_, a_, rota_pag, voo_pag), "0.6")
     if B.inter:
         BI = B.inter
+        # rota ou voo internacional com poucos voos medidos ou cancelamento acima de 40% (em geral, registro incompleto na ANAC)
+        for r_ in BI.pag_rotas:
+            a_ = BI.soma(BI.rota, r_, BI.u3)
+            if a_.med < 20 or (a_.p_canc or 0) > 0.4:
+                fora_do_google.add(f"/internacionais/rotas/{BI.rota_slug(*r_)}/")
+        for k_ in BI.pag_voos:
+            a_ = soma_acc(BI.voo_legs[k_].values())
+            if a_.med < 24 or (a_.p_canc or 0) > 0.4:
+                fora_do_google.add(f"/internacionais/voos/{BI.voo_slug(*k_)}/")
         try:  # internacional é um extra: um erro aqui não pode derrubar o resto do site
             paginas_int = [("/internacionais/", pg_internacionais(BI), "0.9")]
             paginas_int += [(f"/internacionais/rotas/{BI.rota_slug(o_, d_)}/", pg_int_rota(BI, o_, d_), "0.6") for o_, d_ in sorted(BI.pag_rotas)]
@@ -4475,6 +4934,8 @@ def main() -> int:
     for m in B.lista:
         pub(f"/resumo/{m}/", pg_resumo(B, m), "0.7" if m != B.ref else "0.9")
     pub("/direitos/", pg_direitos(B), "0.9")
+    for s_g, f_g in PAGINAS_DIREITOS.items():
+        pub(f"/direitos/{s_g}/", f_g(B), "0.8")
     pub("/mapa/", pg_mapa(B, aero_pag), "0.8")
     if B.dem:
         pub("/demanda/", pg_demanda(B, aero_pag, rota_pag), "0.8")
@@ -4487,7 +4948,9 @@ def main() -> int:
     escreve("/404.html", pg_404(B))
 
     # busca
-    idx = [["Seus direitos: voo atrasado ou cancelado, overbooking, bagagem", "guia", "/direitos/"],
+    idx = [["Seus direitos: voo atrasado ou cancelado, overbooking, bagagem", "guia", "/direitos/"]]
+    idx += [[f"{t}: {d}", "guia", f"/direitos/{s_g}/"] for s_g, t, d in GUIAS_DIREITOS]
+    idx += [
            ["Mapa da pontualidade dos aeroportos do Brasil por estado", "mapa", "/mapa/"]]
     if B.dem:
         idx.append(["Passageiros e ocupação dos voos: aeroporto lotado atrasa mais", "demanda", "/demanda/"])
