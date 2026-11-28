@@ -1332,8 +1332,10 @@ def pg_voo(B: Base, k, trecho: str, voo_pag) -> str:
 {linha_destino(B, d)}
 {faq}"""
     # título no formato da busca ("ad 4942", "voo 2914 azul"): quem procura quer saber horário e se o voo atrasa
-    return pagina(B, f"/voos/{B.voo_slug(c, n)}/", (f"Voo {cod.replace(' ', '')} {cia}: acompanhe o voo e veja os atrasos ({B.cod(o)} → {B.cod(d)})" if botao_ao_vivo(c, n)
-                   else f"Voo {cod} {cia} ({trecho}): horário e atrasos, {pc(a.p_pont)} no horário"),
+    # Título: o código COM espaço ("G3 1388"), como as pessoas buscam, e as cidades. Em 25/11/2026 o título virou
+    # "Voo G31388 GOL: acompanhe o voo..." e as impressões no Google caíram de ~20 mil para ~1,4 mil por dia.
+    # Não mudar sem teste A/B (metade das páginas) medido no Search Console.
+    return pagina(B, f"/voos/{B.voo_slug(c, n)}/", f"Voo {cod} {cia} ({trecho}): horário e atrasos, {pc(a.p_pont)} no horário",
                   (f"Acompanhe o voo {cod.replace(' ', '')} ({cod}) da {cia} ao vivo no mapa e veja o histórico: " if botao_ao_vivo(c, n) else f"O voo {cod} da {cia}: ")
                   + f"chegou no horário em {pc(a.p_pont)} das vezes nos últimos 3 meses ({trecho}{f', saída às {hora0}' if hora0 else ''}), "
                   f"com {pc(a.p_canc)} de cancelamentos.",
@@ -4723,7 +4725,7 @@ def pg_int_voo(BI: "BaseInt", k) -> str:
 {int_nota_limpeza(BI, k)}
 {int_aviso_direitos()}
 {faq}"""
-    return pagina(BI.dom, f"/internacionais/voos/{BI.voo_slug(c, n)}/", (f"Voo {cod.replace(' ', '')} {cia}: acompanhe o voo e veja os atrasos ({BI.cod(o)} → {BI.cod(d)})" if vivo else f"Voo {cod} {cia} ({trecho}): atrasos, {pc(a.p_pont)} no horário"),
+    return pagina(BI.dom, f"/internacionais/voos/{BI.voo_slug(c, n)}/", f"Voo {cod} {cia} ({trecho}): atrasos, {pc(a.p_pont)} no horário",
                   ("Acompanhe ao vivo no mapa e veja o histórico. " if vivo else "") + f"O voo {cod} da {cia} ({trecho}) chegou no horário em {pc(a.p_pont)} das viagens nos últimos 3 meses. Atrasos, cancelamentos e mês a mês, com dados da ANAC.",
                   corpo, "/internacionais/", migalhas=[("/internacionais/", "Internacionais"), ("", f"Voo {cod}")], jsonld=[ld])
 
