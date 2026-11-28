@@ -1,0 +1,17 @@
+name: Sonda do site (diagnóstico)
+on:
+  workflow_dispatch:
+jobs:
+  sonda:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Site no ar?
+        run: |
+          for u in https://vooemnumeros.com.br/ https://vooemnumeros.com.br/voos/g3-1388/ https://vooemnumeros.com.br/robots.txt https://vooemnumeros.com.br/sitemap.xml http://vooemnumeros.com.br/ https://www.vooemnumeros.com.br/ https://oleoemnumeros.github.io/voo-em-numeros/ https://oleoemnumeros.github.io/Voo-em-numeros/; do
+            echo "=== $u"; curl -sS -o /tmp/p -w "status %{http_code} | final %{url_effective} | redirs %{num_redirects}\n" -L -A "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" "$u" || true
+            grep -o '<title>[^<]*' /tmp/p | head -1; grep -o '<meta name="robots"[^>]*>' /tmp/p | head -1; grep -o '<link rel="canonical"[^>]*>' /tmp/p | head -1
+          done
+          echo "=== robots.txt"; curl -sS https://vooemnumeros.com.br/robots.txt
+          echo "=== sitemap head"; curl -sS https://vooemnumeros.com.br/sitemap.xml | head -c 600; echo
+          echo "=== headers voo"; curl -sSI https://vooemnumeros.com.br/voos/g3-1388/ | head -20
+          echo "=== DNS"; dig +short vooemnumeros.com.br; dig +short www.vooemnumeros.com.br
