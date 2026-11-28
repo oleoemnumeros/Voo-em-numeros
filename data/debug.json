@@ -1,28 +1,5 @@
 {
- "execucao": "2026-11-28T09:27:40+00:00",
- "meses": {
-  "2026-10": {
-   "linhas": 87130,
-   "sem_previsto": 1198,
-   "domesticos": 68505,
-   "confere": 67162,
-   "carga": 316,
-   "outro_mes": 1,
-   "diverge": 1
-  }
- },
- "internacional": {
-  "2026-10": {
-   "linhas": 87130,
-   "internacionais": 12785,
-   "confere": 12505,
-   "sem_previsto": 301,
-   "diverge": 14,
-   "sem_ponta_no_brasil": 835,
-   "carga": 72,
-   "atraso_absurdo": 11,
-   "outro_mes": 5
-  }
- },
- "novos": 1
+ "execucao": "2026-11-28T11:25:21+00:00",
+ "meses": {},
+ "novos": 0
 }
